@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Rhythm Tap</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#070b14;--hit:#06b6d4;
+  --perfect:#fbbf24;--good:#34d399;--ok:#60a5fa;--miss:#f87171;
+  --tile:#1a2236;--tile-border:#2a3a5c;--tile-text:#e2e8f0;
+  --slot:#1e293b;--rail:#1e293b;--dot-dim:#334155;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:#e2e8f0;
+  font-family:'Outfit',system-ui,sans-serif;touch-action:manipulation;user-select:none;
+  -webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+
+/* ── Beat flash overlay (whole-screen pulse) ── */
+#beat-flash{position:fixed;inset:0;pointer-events:none;z-index:40;opacity:0;
+  background:radial-gradient(ellipse at 50% 60%, #06b6d40a 0%, transparent 65%)}
+#beat-flash.bp{animation:flashPulse .32s ease-out}
+@keyframes flashPulse{0%{opacity:1}100%{opacity:0}}
+
+/* ── Start Screen ── */
+#start-screen{position:fixed;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:100;background:var(--bg);padding:20px}
+#start-screen h1{font-family:'Orbitron',monospace;font-size:clamp(28px,6vw,52px);
+  font-weight:900;letter-spacing:2px;
+  background:linear-gradient(135deg,var(--hit),#a78bfa,var(--perfect));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;margin-bottom:8px}
+#start-screen .subtitle{font-size:clamp(13px,3vw,18px);color:#94a3b8;margin-bottom:30px;
+  letter-spacing:4px;text-transform:uppercase}
+.song-title{font-size:clamp(18px,4vw,26px);font-weight:700}
+.song-detail{font-size:14px;color:#64748b;margin:6px 0 24px}
+.instructions{max-width:440px;text-align:center;color:#94a3b8;font-size:14px;
+  line-height:1.8;margin-bottom:26px}
+.instructions strong{color:var(--hit)}
+.instructions .hold-hint{color:var(--perfect)}
+#start-btn{font-family:'Orbitron',monospace;font-size:20px;font-weight:700;
+  padding:16px 56px;border:2px solid var(--hit);border-radius:50px;
+  background:transparent;color:var(--hit);cursor:pointer;letter-spacing:3px;
+  transition:all .2s}
+#start-btn:hover,#start-btn:active{background:var(--hit);color:var(--bg);
+  box-shadow:0 0 30px #06b6d440}
+.option-row{margin-top:18px;font-size:13px;color:#64748b;display:flex;
+  align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
+.option-row input[type=checkbox]{accent-color:var(--hit)}
+#tempo-slider{width:160px;accent-color:var(--hit)}
+#tempo-label{font-family:'Orbitron',monospace;color:var(--hit);min-width:44px;
+  font-size:13px;font-weight:700}
+
+/* ── Countdown ── */
+#countdown{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+  z-index:90;background:var(--bg);font-family:'Orbitron',monospace;
+  font-size:clamp(80px,20vw,160px);font-weight:900;color:var(--hit);
+  text-shadow:0 0 40px #06b6d460}
+
+/* ── Game Screen ── */
+#game-screen{position:fixed;inset:0;display:none;flex-direction:column;z-index:50}
+#hud{display:flex;justify-content:space-between;padding:12px 20px 4px}
+.hud-box{text-align:center}
+.hud-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:2px;
+  font-family:'Orbitron',monospace}
+.hud-value{font-family:'Orbitron',monospace;font-size:clamp(18px,4vw,28px);font-weight:900}
+#combo-display{color:var(--perfect);transition:transform .1s}
+#combo-display.bump{transform:scale(1.3)}
+
+/* Assembly bar */
+#assembly{min-height:52px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:5px;
+  align-items:center;justify-content:center;border-bottom:1px solid #1e293b20}
+.slot{height:32px;min-width:32px;padding:0 8px;border-radius:7px;
+  background:var(--slot);border:1.5px dashed #33415540;
+  display:flex;align-items:center;justify-content:center;
+  font-size:clamp(12px,2.4vw,15px);font-weight:600;color:transparent;
+  transition:all .25s}
+.slot.filled{border-style:solid;color:#e2e8f0}
+.slot.filled.j-perfect{border-color:var(--perfect);color:var(--perfect);background:#fbbf2412}
+.slot.filled.j-good{border-color:var(--good);color:var(--good);background:#34d39912}
+.slot.filled.j-ok{border-color:var(--ok);color:var(--ok);background:#60a5fa12}
+.slot.filled.j-miss{border-color:var(--miss);color:var(--miss);opacity:.5;background:#f8717112}
+
+/* ═══ Timeline — continuous scrolling strip ═══ */
+#timeline{height:54px;position:relative;margin:6px 0 2px;flex-shrink:0;
+  overflow:hidden;border-top:1px solid #1e293b30;border-bottom:1px solid #1e293b30}
+#timeline-rail{position:absolute;top:50%;left:0;right:0;height:2px;
+  background:var(--rail);transform:translateY(-50%);border-radius:1px;z-index:1}
+#timeline-rail.bp{animation:railPulse .3s ease-out}
+@keyframes railPulse{0%{box-shadow:0 0 10px #06b6d450}100%{box-shadow:none}}
+#tl-content{position:absolute;top:0;bottom:0;left:0;will-change:transform;z-index:2}
+.tl-beat{position:absolute;top:32%;bottom:32%;width:1px;background:#2a3a5c45}
+.tl-beat.down{top:22%;bottom:22%;width:2px;background:#3b4f7a70}
+.tl-note{position:absolute;top:50%;height:12px;border-radius:6px;
+  background:var(--dot-dim);transform:translateY(-50%);z-index:3;
+  transition:background .15s,box-shadow .15s}
+.tl-note.approaching{background:#06b6d480;box-shadow:0 0 8px #06b6d460}
+.tl-note.active{background:var(--hit);box-shadow:0 0 14px #06b6d480}
+.tl-note.hit-perfect{background:var(--perfect);box-shadow:0 0 10px #fbbf2450}
+.tl-note.hit-good{background:var(--good);box-shadow:0 0 10px #34d39950}
+.tl-note.hit-ok{background:var(--ok);box-shadow:0 0 8px #60a5fa40}
+.tl-note.hit-miss{background:var(--miss);opacity:.4}
+#playhead{position:absolute;top:6px;bottom:6px;width:2px;left:30%;
+  background:#fff;border-radius:1px;z-index:6;
+  box-shadow:0 0 8px #ffffff60,0 0 16px #ffffff25}
+
+/* ═══ Play area ═══ */
+#play-area{flex:1;position:relative;min-height:0;overflow:hidden}
+
+/* Tiles */
+.tile{position:absolute;height:50px;min-width:50px;padding:0 14px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--tile);border:1.5px solid var(--tile-border);
+  border-radius:12px;cursor:pointer;overflow:hidden;
+  font-size:clamp(15px,3vw,19px);font-weight:600;color:var(--tile-text);
+  white-space:nowrap;z-index:10;
+  opacity:0;transform:scale(.6);
+  transition:opacity .3s,transform .25s,border-color .2s,box-shadow .2s,background .2s}
+.tile.spawned{opacity:1;transform:scale(1)}
+.tile .tile-text{position:relative;z-index:2}
+.tile .hold-fill{position:absolute;left:0;top:0;bottom:0;width:0;
+  background:linear-gradient(90deg,#06b6d435,#06b6d455);z-index:1;border-radius:10px}
+.tile .hold-icon{position:relative;z-index:2;margin-left:6px;font-size:11px;
+  color:#64748b;letter-spacing:-1px}
+
+/* Charging stages */
+.tile.charge-1{border-color:#06b6d440;box-shadow:0 0 6px #06b6d415}
+.tile.charge-2{border-color:#06b6d480;
+  box-shadow:0 0 12px #06b6d430,0 0 24px #06b6d410;transform:scale(1.03)}
+.tile.charge-3{border-color:var(--hit);background:#06b6d418;
+  box-shadow:0 0 18px #06b6d450,0 0 36px #06b6d420;transform:scale(1.07)}
+
+/* Beat-synced pulse on charging tiles */
+.tile.bp{animation:beatGlow .28s ease-out}
+@keyframes beatGlow{0%{filter:brightness(1.6) saturate(1.4)}100%{filter:brightness(1)}}
+
+.tile.holding{border-color:var(--hit);background:#06b6d410;
+  box-shadow:0 0 20px #06b6d460;transform:scale(1.05)}
+.tile.done{opacity:0;transform:scale(.3);pointer-events:none;animation:none;box-shadow:none}
+.tile.missed-tile{background:#f8717110;border-color:var(--miss);color:var(--miss);
+  opacity:.3;pointer-events:none;animation:none;box-shadow:none}
+.tile.wrong{animation:wrongShake .3s ease}
+@keyframes wrongShake{0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* Flying clone */
+.fly-clone{position:fixed;z-index:200;pointer-events:none;
+  height:50px;min-width:50px;padding:0 14px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:clamp(15px,3vw,19px);font-weight:600;font-family:'Outfit',sans-serif;
+  transition:all .35s cubic-bezier(.3,.9,.4,1)}
+
+/* Timing flash */
+.timing-flash{position:fixed;font-family:'Orbitron',monospace;
+  font-size:clamp(14px,2.8vw,20px);font-weight:700;pointer-events:none;z-index:210;
+  text-shadow:0 0 12px currentColor;animation:flashUp .5s ease-out forwards}
+@keyframes flashUp{0%{opacity:1;transform:translateY(0) scale(1)}
+  100%{opacity:0;transform:translateY(-30px) scale(1.08)}}
+
+.particle{position:fixed;width:5px;height:5px;border-radius:50%;
+  pointer-events:none;z-index:205}
+
+/* ── Results ── */
+#results-screen{position:fixed;inset:0;display:none;flex-direction:column;
+  align-items:center;justify-content:center;z-index:100;background:var(--bg);padding:20px}
+.grade{font-family:'Orbitron',monospace;font-size:clamp(80px,18vw,140px);
+  font-weight:900;line-height:1;margin-bottom:10px}
+.grade-s{background:linear-gradient(135deg,var(--perfect),#f59e0b);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.grade-a{color:var(--good)}.grade-b{color:var(--ok)}
+.grade-c{color:var(--perfect)}.grade-d{color:var(--miss)}
+#result-score{font-family:'Orbitron',monospace;font-size:clamp(24px,5vw,36px);
+  font-weight:700;margin-bottom:6px}
+#result-accuracy{font-size:16px;color:#94a3b8;margin-bottom:28px}
+.result-breakdown{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+  margin-bottom:12px;max-width:380px;width:90%}
+.result-stat{text-align:center}
+.result-stat .count{font-family:'Orbitron',monospace;font-size:22px;font-weight:700}
+.result-stat .label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.stat-perfect .count{color:var(--perfect)}.stat-good .count{color:var(--good)}
+.stat-ok .count{color:var(--ok)}.stat-miss .count{color:var(--miss)}
+#result-wrong{font-size:13px;color:#64748b;margin-bottom:6px}
+#result-combo{font-size:14px;color:#64748b;margin-bottom:28px}
+#retry-btn{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;
+  padding:14px 48px;border:2px solid var(--hit);border-radius:50px;
+  background:transparent;color:var(--hit);cursor:pointer;letter-spacing:2px;
+  transition:all .2s}
+#retry-btn:hover,#retry-btn:active{background:var(--hit);color:var(--bg)}
+</style>
+</head>
+<body>
+
+<div id="beat-flash"></div>
+
+<!-- ═══ START ═══ -->
+<div id="start-screen">
+  <h1>RHYTHM TAP</h1>
+  <div class="subtitle">tap &amp; hold the beat</div>
+  <div class="song-title">Can't Help Falling in Love</div>
+  <div class="song-detail">Elvis Presley · slow &amp; steady</div>
+  <p class="instructions">
+    Watch the timeline — dots are <strong>quick taps</strong>,<br>
+    bars are <span class="hold-hint">held notes: press and hold</span><br>
+    until the tile fills up. Long words drag across beats,<br>
+    just like Elvis sings them.<br>
+    Everything pulses with the beat — feel it, then tap it.
+  </p>
+  <button id="start-btn" onclick="startGame()">START</button>
+  <div class="option-row">
+    <label>Tempo</label>
+    <input type="range" id="tempo-slider" min="70" max="120" value="100" step="5"
+      oninput="document.getElementById('tempo-label').textContent=this.value+'%'">
+    <span id="tempo-label">100%</span>
+  </div>
+  <div class="option-row">
+    <label><input type="checkbox" id="metronome-cb" checked> Metronome click</label>
+  </div>
+</div>
+
+<!-- ═══ COUNTDOWN ═══ -->
+<div id="countdown"></div>
+
+<!-- ═══ GAME ═══ -->
+<div id="game-screen">
+  <div id="hud">
+    <div class="hud-box"><div class="hud-label">Score</div><div class="hud-value" id="score-display">0</div></div>
+    <div class="hud-box"><div class="hud-label">Combo</div><div class="hud-value" id="combo-display">0</div></div>
+  </div>
+  <div id="assembly"></div>
+  <div id="timeline">
+    <div id="timeline-rail"></div>
+    <div id="tl-content"></div>
+    <div id="playhead"></div>
+  </div>
+  <div id="play-area"></div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<div id="results-screen">
+  <div class="grade" id="result-grade"></div>
+  <div id="result-score"></div>
+  <div id="result-accuracy"></div>
+  <div class="result-breakdown">
+    <div class="result-stat stat-perfect"><div class="count" id="r-perfect">0</div><div class="label">Perfect</div></div>
+    <div class="result-stat stat-good"><div class="count" id="r-good">0</div><div class="label">Good</div></div>
+    <div class="result-stat stat-ok"><div class="count" id="r-ok">0</div><div class="label">OK</div></div>
+    <div class="result-stat stat-miss"><div class="count" id="r-miss">0</div><div class="label">Miss</div></div>
+  </div>
+  <div id="result-wrong"></div>
+  <div id="result-combo"></div>
+  <button id="retry-btn" onclick="resetGame()">RETRY</button>
+</div>
+
+<script>
+/* ══════════════════════════════════════════
+   SONG DATA — Can't Help Falling in Love
+   Base grid: 1 beat = 1.0s (≈60 BPM sway)
+   time = onset (s), dur = how long the syllable is sung (s)
+   dur >= HOLD_MIN_DUR → hold note
+   ══════════════════════════════════════════ */
+const SONG = {
+  title:"Can't Help Falling in Love", bpm:60,
+  lines:[
+    { text:"Wise men say",
+      syllables:[
+        {t:"Wise",time:0.0,dur:1.0},{t:"men",time:1.0,dur:1.0},
+        {t:"say",time:2.0,dur:2.0}]},
+    { text:"Only fools rush in",
+      syllables:[
+        {t:"On",time:6.0,dur:0.5},{t:"ly",time:6.5,dur:0.5},
+        {t:"fools",time:7.0,dur:1.0},{t:"rush",time:8.0,dur:1.0},
+        {t:"in",time:9.0,dur:2.0}]},
+    { text:"But I can't help falling in love with you",
+      syllables:[
+        {t:"But",time:13.0,dur:0.5},{t:"I",time:13.5,dur:0.5},
+        {t:"can't",time:14.0,dur:1.0},{t:"help",time:15.0,dur:1.0},
+        {t:"fall",time:16.0,dur:0.5},{t:"ing",time:16.5,dur:0.5},
+        {t:"in",time:17.0,dur:1.0},{t:"love",time:18.0,dur:1.0},
+        {t:"with",time:19.0,dur:1.0},{t:"you",time:20.0,dur:2.5}]},
+    { text:"Shall I stay?",
+      syllables:[
+        {t:"Shall",time:26.0,dur:1.0},{t:"I",time:27.0,dur:1.0},
+        {t:"stay",time:28.0,dur:2.0}]},
+    { text:"Would it be a sin",
+      syllables:[
+        {t:"Would",time:32.0,dur:0.5},{t:"it",time:32.5,dur:0.5},
+        {t:"be",time:33.0,dur:0.5},{t:"a",time:33.5,dur:0.5},
+        {t:"sin",time:34.0,dur:2.0}]},
+    { text:"If I can't help falling in love with you",
+      syllables:[
+        {t:"If",time:38.5,dur:0.5},{t:"I",time:39.0,dur:0.5},
+        {t:"can't",time:39.5,dur:1.0},{t:"help",time:40.5,dur:1.0},
+        {t:"fall",time:41.5,dur:0.5},{t:"ing",time:42.0,dur:0.5},
+        {t:"in",time:42.5,dur:1.0},{t:"love",time:43.5,dur:1.0},
+        {t:"with",time:44.5,dur:1.0},{t:"you",time:45.5,dur:2.5}]},
+    { text:"Like a river flows",
+      syllables:[
+        {t:"Like",time:51.0,dur:0.5},{t:"a",time:51.5,dur:0.5},
+        {t:"ri",time:52.0,dur:0.5},{t:"ver",time:52.5,dur:0.5},
+        {t:"flows",time:53.0,dur:2.0}]},
+    { text:"Surely to the sea",
+      syllables:[
+        {t:"Sure",time:57.0,dur:0.5},{t:"ly",time:57.5,dur:0.5},
+        {t:"to",time:58.0,dur:0.5},{t:"the",time:58.5,dur:0.5},
+        {t:"sea",time:59.0,dur:2.0}]},
+    { text:"Darling, so it goes",
+      syllables:[
+        {t:"Dar",time:63.0,dur:0.5},{t:"ling",time:63.5,dur:0.5},
+        {t:"so",time:64.0,dur:0.5},{t:"it",time:64.5,dur:0.5},
+        {t:"goes",time:65.0,dur:2.0}]},
+    { text:"Some things are meant to be",
+      syllables:[
+        {t:"Some",time:69.0,dur:1.0},{t:"things",time:70.0,dur:1.0},
+        {t:"are",time:71.0,dur:0.5},{t:"meant",time:71.5,dur:1.0},
+        {t:"to",time:72.5,dur:0.5},{t:"be",time:73.0,dur:2.5}]},
+  ]
+};
+
+/* ══════════════════════════════════════════
+   CONFIG
+   ══════════════════════════════════════════ */
+const BASE_BEAT   = 60 / SONG.bpm;    // 1.0s at base
+const HOLD_MIN_DUR= 1.5;              // base-seconds; dur >= this → hold note
+const HOLD_RATIO  = 0.6;              // must hold 60% of scaled dur to complete
+const TL_PAD      = 0.6;
+const SPAWN_LEAD  = 2.8;
+const CHARGE_FAR  = 0.65;
+const CHARGE_MID  = 0.38;
+const CHARGE_HOT  = 0.16;
+const PERFECT_MS  = 130;
+const GOOD_MS     = 260;
+const OK_MS       = 420;
+const MISS_CUTOFF = 520;
+const END_PAD     = 2.0;
+const TL_PX       = 50;               // timeline pixels per second
+const PLAYHEAD_PCT= 0.30;             // fixed playhead position (fraction of width)
+const SCORES      = {perfect:100, good:75, ok:50, miss:0};
+
+/* ══════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════ */
+let audioCtx=null, gameRunning=false, startTime=0, animFrame=null;
+let score=0, combo=0, maxCombo=0, wrongTaps=0;
+let counts={perfect:0,good:0,ok:0,miss:0};
+let metronomeOn=true, lastBeatPlayed=-1;
+let totalSyllables=0;
+let SCALED=null, BEAT=BASE_BEAT, tempoScale=1;
+
+let lineIdx=-1, lineTiles=[], lineSlots=[], lineDone=true;
+let tlNotes=[];            // [lineIdx][order] → timeline note element (whole song)
+
+/* ══════════════════════════════════════════
+   TEMPO SCALING
+   ══════════════════════════════════════════ */
+function buildScaledSong(pct){
+  tempoScale = 100/pct;          // 80% tempo → 1.25× longer times
+  BEAT = BASE_BEAT * tempoScale;
+  SCALED = {
+    title:SONG.title,
+    lines:SONG.lines.map(l=>({
+      text:l.text, echo:!!l.echo,
+      syllables:l.syllables.map(s=>({
+        t:s.t,
+        time:s.time*tempoScale,
+        dur:s.dur*tempoScale,
+        isHold:s.dur>=HOLD_MIN_DUR
+      }))
+    }))
+  };
+}
+
+/* ══════════════════════════════════════════
+   AUDIO
+   ══════════════════════════════════════════ */
+function initAudio(){
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+function playClick(hi){
+  if(!metronomeOn||!audioCtx) return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.connect(g);g.connect(audioCtx.destination);
+  o.type='sine';o.frequency.value=hi?1000:700;
+  g.gain.setValueAtTime(hi?.08:.05,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.06);
+  o.start();o.stop(audioCtx.currentTime+.06);
+}
+function playHitSound(j){
+  if(!audioCtx) return;
+  const f=j==='perfect'?880:j==='good'?660:440;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.connect(g);g.connect(audioCtx.destination);
+  o.type='triangle';o.frequency.value=f;
+  g.gain.setValueAtTime(.1,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.12);
+  o.start();o.stop(audioCtx.currentTime+.12);
+}
+function playWrongSound(){
+  if(!audioCtx) return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.connect(g);g.connect(audioCtx.destination);
+  o.type='sawtooth';o.frequency.value=160;
+  g.gain.setValueAtTime(.06,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.15);
+  o.start();o.stop(audioCtx.currentTime+.15);
+}
+
+/* ══════════════════════════════════════════
+   FX
+   ══════════════════════════════════════════ */
+function showTimingFlash(judgment,x,y){
+  const el=document.createElement('div');
+  el.className='timing-flash';
+  el.style.color={perfect:'var(--perfect)',good:'var(--good)',ok:'var(--ok)',miss:'var(--miss)'}[judgment];
+  el.textContent={perfect:'PERFECT',good:'GOOD',ok:'OK',miss:'MISS'}[judgment];
+  el.style.left=x+'px';el.style.top=y+'px';el.style.transform='translateX(-50%)';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),550);
+}
+function spawnParticles(x,y,color,n){
+  for(let i=0;i<n;i++){
+    const p=document.createElement('div');
+    p.className='particle';p.style.background=color;
+    p.style.left=x+'px';p.style.top=y+'px';
+    const a=(Math.PI*2/n)*i+Math.random()*.5,d=35+Math.random()*45;
+    p.style.transition='all .45s cubic-bezier(.2,.8,.3,1)';
+    document.body.appendChild(p);
+    requestAnimationFrame(()=>{
+      p.style.transform=`translate(${Math.cos(a)*d}px,${Math.sin(a)*d}px) scale(0)`;
+      p.style.opacity='0';
+    });
+    setTimeout(()=>p.remove(),500);
+  }
+}
+
+/* Beat-synced pulse: fires on every metronome beat */
+function beatPulse(){
+  document.querySelectorAll('.tile.charge-1,.tile.charge-2,.tile.charge-3').forEach(el=>{
+    el.classList.remove('bp'); void el.offsetWidth; el.classList.add('bp');
+  });
+  const rail=document.getElementById('timeline-rail');
+  rail.classList.remove('bp'); void rail.offsetWidth; rail.classList.add('bp');
+  const fl=document.getElementById('beat-flash');
+  fl.classList.remove('bp'); void fl.offsetWidth; fl.classList.add('bp');
+}
+
+/* ══════════════════════════════════════════
+   TILE SIZING & SCATTER
+   ══════════════════════════════════════════ */
+function tileWidth(s){
+  const base=Math.max(50, s.t.length*13+30);
+  if(!s.isHold) return base;
+  const extraBeats=(s.dur/BEAT)-1;
+  return Math.min(base + Math.max(0,extraBeats)*34, 180);
+}
+
+function scatterPositions(sylls, areaW, areaH){
+  const TILE_H=50,PAD=8;
+  const maxW=Math.max(...sylls.map(tileWidth));
+  const zoneW=Math.min(areaW-12,400);
+  const zoneH=Math.min(areaH-16,440);
+  const offX=(areaW-zoneW)/2;
+  const offY=Math.max(4,(areaH-zoneH)/2-6);
+  const cellW=Math.min(maxW+PAD, zoneW), cellH=TILE_H+PAD;
+  const cols=Math.max(1,Math.floor(zoneW/cellW));
+  let rows=Math.max(1,Math.floor(zoneH/cellH));
+  while(cols*rows<sylls.length) rows++;
+  const cells=[];
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) cells.push({r,c});
+  for(let i=cells.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [cells[i],cells[j]]=[cells[j],cells[i]];
+  }
+  return sylls.map((s,i)=>{
+    const cell=cells[i],w=tileWidth(s);
+    const jx=Math.random()*Math.max(0,cellW-w-2);
+    const jy=Math.random()*Math.max(0,cellH-TILE_H-2);
+    return {x:Math.min(offX+cell.c*cellW+jx, offX+zoneW-w),
+            y:offY+cell.r*cellH+jy, w};
+  });
+}
+
+/* ══════════════════════════════════════════
+   TIMELINE — build whole-song scrolling strip
+   ══════════════════════════════════════════ */
+function buildTimeline(){
+  const content=document.getElementById('tl-content');
+  content.innerHTML='';
+  tlNotes=[];
+
+  const lastLine=SCALED.lines[SCALED.lines.length-1];
+  const lastSyl=lastLine.syllables[lastLine.syllables.length-1];
+  const songEnd=lastSyl.time+lastSyl.dur+END_PAD;
+  content.style.width=(songEnd+4)*TL_PX+'px';
+
+  // Beat grid: a tick for every beat, stronger every 3rd (waltz downbeat)
+  const totalBeats=Math.ceil(songEnd/BEAT);
+  for(let b=0;b<=totalBeats;b++){
+    const tick=document.createElement('div');
+    tick.className='tl-beat'+(b%3===0?' down':'');
+    tick.style.left=(b*BEAT*TL_PX)+'px';
+    content.appendChild(tick);
+  }
+
+  // Syllable bars: every syllable is a bar, width = its sung duration
+  SCALED.lines.forEach((line,li)=>{
+    tlNotes[li]=[];
+    line.syllables.forEach((s,order)=>{
+      const bar=document.createElement('div');
+      bar.className='tl-note';
+      bar.style.left=(s.time*TL_PX)+'px';
+      bar.style.width=Math.max(10, s.dur*TL_PX-3)+'px';
+      content.appendChild(bar);
+      tlNotes[li][order]=bar;
+    });
+  });
+}
+
+/* ══════════════════════════════════════════
+   LINE SPAWNING
+   ══════════════════════════════════════════ */
+function spawnLine(li){
+  const line=SCALED.lines[li];
+  const area=document.getElementById('play-area');
+  const assembly=document.getElementById('assembly');
+
+  assembly.innerHTML='';
+  lineSlots=[];
+  line.syllables.forEach(s=>{
+    const slot=document.createElement('div');
+    slot.className='slot'; slot.textContent=s.t;
+    assembly.appendChild(slot);
+    lineSlots.push(slot);
+  });
+
+  const areaW=area.clientWidth, areaH=area.clientHeight;
+  const positions=scatterPositions(line.syllables, areaW, areaH);
+
+  lineTiles=[];
+  line.syllables.forEach((s,order)=>{
+    const el=document.createElement('div');
+    el.className='tile'+(line.echo?' echo':'');
+    el.style.left=positions[order].x+'px';
+    el.style.top=positions[order].y+'px';
+    el.style.minWidth=positions[order].w+'px';
+
+    if(s.isHold){
+      const fill=document.createElement('div');
+      fill.className='hold-fill';
+      el.appendChild(fill);
+    }
+    const txt=document.createElement('span');
+    txt.className='tile-text';
+    txt.textContent=s.t;
+    el.appendChild(txt);
+    if(s.isHold){
+      const icon=document.createElement('span');
+      icon.className='hold-icon';
+      icon.textContent='▬▬';
+      el.appendChild(icon);
+    }
+
+    area.appendChild(el);
+    setTimeout(()=>el.classList.add('spawned'), order*40);
+
+    const tile={el, dotEl:tlNotes[li][order], time:s.time, dur:s.dur,
+                isHold:s.isHold, order, resolved:false, judgment:null,
+                holding:false, holdStart:0, pressJudgment:null};
+    lineTiles.push(tile);
+
+    const press=e=>{e.preventDefault();e.stopPropagation();onTilePress(tile);};
+    el.addEventListener('touchstart',press,{passive:false});
+    el.addEventListener('mousedown',press);
+  });
+
+  lineIdx=li;
+  lineDone=false;
+}
+
+function clearLine(){
+  lineTiles.forEach(t=>t.el.remove());
+  lineTiles=[];
+  lineDone=true;
+}
+
+/* ══════════════════════════════════════════
+   TAP / HOLD LOGIC
+   ══════════════════════════════════════════ */
+function nextExpected(){
+  return lineTiles.find(t=>!t.resolved)||null;
+}
+function downgrade(j){
+  return j==='perfect'?'good' : 'ok';
+}
+
+function onTilePress(tile){
+  if(!gameRunning||tile.resolved||tile.holding) return;
+  const now=(performance.now()-startTime)/1000;
+  const expected=nextExpected();
+
+  if(tile!==expected){
+    tile.el.classList.remove('wrong');
+    void tile.el.offsetWidth;
+    tile.el.classList.add('wrong');
+    playWrongSound();
+    wrongTaps++;combo=0;updateHUD();
+    return;
+  }
+
+  const diffMs=Math.abs(now-tile.time)*1000;
+  if(now<tile.time && diffMs>OK_MS){
+    tile.el.classList.remove('wrong');
+    void tile.el.offsetWidth;
+    tile.el.classList.add('wrong');
+    playWrongSound();
+    combo=0;updateHUD();
+    return;
+  }
+
+  let judgment;
+  if(diffMs<=PERFECT_MS) judgment='perfect';
+  else if(diffMs<=GOOD_MS) judgment='good';
+  else judgment='ok';
+
+  if(!tile.isHold){
+    resolveTile(tile,judgment);
+    return;
+  }
+
+  // ─ Hold note: start holding ─
+  tile.holding=true;
+  tile.holdStart=now;
+  tile.pressJudgment=judgment;
+  tile.el.classList.remove('charge-1','charge-2','charge-3');
+  tile.el.classList.add('holding');
+
+  const fill=tile.el.querySelector('.hold-fill');
+  if(fill){
+    const holdSecs=tile.dur*HOLD_RATIO;
+    fill.style.transition=`width ${holdSecs}s linear`;
+    void fill.offsetWidth;
+    fill.style.width='100%';
+  }
+
+  const rel=()=>{
+    window.removeEventListener('mouseup',rel);
+    window.removeEventListener('touchend',rel);
+    window.removeEventListener('touchcancel',rel);
+    onTileRelease(tile);
+  };
+  window.addEventListener('mouseup',rel);
+  window.addEventListener('touchend',rel);
+  window.addEventListener('touchcancel',rel);
+}
+
+function onTileRelease(tile){
+  if(!gameRunning||tile.resolved||!tile.holding) return;
+  const now=(performance.now()-startTime)/1000;
+  const held=now-tile.holdStart;
+  const required=tile.dur*HOLD_RATIO;
+  tile.holding=false;
+  tile.el.classList.remove('holding');
+
+  if(held>=required){
+    resolveTile(tile,tile.pressJudgment);
+  } else {
+    resolveTile(tile,downgrade(tile.pressJudgment));
+  }
+}
+
+function resolveTile(tile,judgment){
+  tile.resolved=true;
+  tile.holding=false;
+  tile.judgment=judgment;
+  counts[judgment]++;
+  score+=SCORES[judgment];
+  tile.dotEl.className='tl-note hit-'+judgment;
+  tile.el.classList.remove('charge-1','charge-2','charge-3','holding');
+
+  if(judgment==='miss'){
+    combo=0;
+    tile.el.classList.add('missed-tile');
+    lineSlots[tile.order].classList.add('filled','j-miss');
+    setTimeout(()=>tile.el.classList.add('done'),400);
+  } else {
+    combo++;
+    if(combo>maxCombo) maxCombo=combo;
+    flyToSlot(tile,judgment);
+    playHitSound(judgment);
+    const r=tile.el.getBoundingClientRect();
+    showTimingFlash(judgment,r.left+r.width/2,r.top-6);
+    if(judgment==='perfect')
+      spawnParticles(r.left+r.width/2,r.top+r.height/2,'#fbbf24',7);
+  }
+  updateHUD();
+}
+
+function flyToSlot(tile,judgment){
+  const slot=lineSlots[tile.order];
+  const from=tile.el.getBoundingClientRect();
+  const to=slot.getBoundingClientRect();
+  const colors={perfect:'#fbbf24',good:'#34d399',ok:'#60a5fa'};
+  const clone=document.createElement('div');
+  clone.className='fly-clone';
+  clone.textContent=tile.el.querySelector('.tile-text').textContent;
+  clone.style.background='var(--tile)';
+  clone.style.border='1.5px solid '+colors[judgment];
+  clone.style.color=colors[judgment];
+  clone.style.boxShadow='0 0 12px '+colors[judgment]+'50';
+  clone.style.left=from.left+'px';clone.style.top=from.top+'px';
+  document.body.appendChild(clone);
+  tile.el.classList.add('done');
+  requestAnimationFrame(()=>{
+    clone.style.left=to.left+'px';clone.style.top=to.top+'px';
+    clone.style.height=to.height+'px';clone.style.minWidth=to.width+'px';
+    clone.style.padding='0 8px';clone.style.fontSize='13px';
+  });
+  setTimeout(()=>{clone.remove();slot.classList.add('filled','j-'+judgment);},380);
+}
+
+/* ══════════════════════════════════════════
+   HUD
+   ══════════════════════════════════════════ */
+function updateHUD(){
+  document.getElementById('score-display').textContent=score;
+  const cd=document.getElementById('combo-display');
+  cd.textContent=combo>0?combo+'×':'0';
+  cd.classList.remove('bump');
+  if(combo>1){void cd.offsetWidth;cd.classList.add('bump');}
+}
+
+/* ══════════════════════════════════════════
+   GAME LOOP
+   ══════════════════════════════════════════ */
+function gameLoop(){
+  if(!gameRunning) return;
+  const now=(performance.now()-startTime)/1000;
+
+  if(lineDone){
+    const ni=lineIdx+1;
+    if(ni<SCALED.lines.length){
+      const ft=SCALED.lines[ni].syllables[0].time;
+      if(now>=ft-SPAWN_LEAD) spawnLine(ni);
+    }
+  }
+
+  // ── Continuous timeline scroll (runs through gaps too) ──
+  const tl=document.getElementById('timeline');
+  const playheadX=tl.clientWidth*PLAYHEAD_PCT;
+  document.getElementById('tl-content').style.transform=
+    `translateX(${playheadX - now*TL_PX}px)`;
+
+  if(!lineDone && lineTiles.length){
+    lineTiles.forEach(tile=>{
+      if(tile.resolved) return;
+
+      if(tile.holding){
+        if(now-tile.holdStart >= tile.dur*HOLD_RATIO){
+          resolveTile(tile,tile.pressJudgment);
+        }
+        return;
+      }
+
+      const dt=tile.time-now;
+
+      if(-dt*1000>MISS_CUTOFF){
+        resolveTile(tile,'miss');
+        return;
+      }
+
+      if(dt>0 && dt<=CHARGE_FAR+.1) tile.dotEl.classList.add('approaching');
+      if(dt<=.05 && dt>=-0.15){
+        tile.dotEl.classList.remove('approaching');
+        tile.dotEl.classList.add('active');
+      }
+
+      tile.el.classList.remove('charge-1','charge-2','charge-3');
+      if(dt<=CHARGE_FAR && dt>CHARGE_MID)      tile.el.classList.add('charge-1');
+      else if(dt<=CHARGE_MID && dt>CHARGE_HOT) tile.el.classList.add('charge-2');
+      else if(dt<=CHARGE_HOT && dt>-0.25)      tile.el.classList.add('charge-3');
+    });
+
+    if(lineTiles.every(t=>t.resolved)){
+      const last=lineTiles[lineTiles.length-1];
+      if(now>last.time+last.dur*0.5+.4) clearLine();
+    }
+  }
+
+  const beat=Math.floor(now/BEAT);
+  if(beat>lastBeatPlayed && now>0){
+    lastBeatPlayed=beat;
+    playClick(beat%3===0);
+    beatPulse();
+  }
+
+  const lastLine=SCALED.lines[SCALED.lines.length-1];
+  const lastSyl=lastLine.syllables[lastLine.syllables.length-1];
+  const songEnd=lastSyl.time+lastSyl.dur+END_PAD;
+  if(now>songEnd && lineDone && lineIdx>=SCALED.lines.length-1){
+    endGame(); return;
+  }
+  animFrame=requestAnimationFrame(gameLoop);
+}
+
+/* ══════════════════════════════════════════
+   FLOW
+   ══════════════════════════════════════════ */
+function startGame(){
+  initAudio();
+  metronomeOn=document.getElementById('metronome-cb').checked;
+  buildScaledSong(parseInt(document.getElementById('tempo-slider').value,10));
+  document.getElementById('start-screen').style.display='none';
+  const cd=document.getElementById('countdown');
+  cd.style.display='flex';
+  let count=3; cd.textContent=count;
+  const iv=setInterval(()=>{
+    count--;
+    if(count>0) cd.textContent=count;
+    else if(count===0){cd.textContent='GO!';cd.style.color='var(--perfect)';}
+    else{clearInterval(iv);cd.style.display='none';cd.style.color='var(--hit)';launchGame();}
+  },1000);
+}
+
+function launchGame(){
+  if(!SCALED) buildScaledSong(parseInt(document.getElementById('tempo-slider').value,10));
+  score=0;combo=0;maxCombo=0;wrongTaps=0;lastBeatPlayed=-1;
+  counts={perfect:0,good:0,ok:0,miss:0};
+  lineIdx=-1;lineDone=true;lineTiles=[];lineSlots=[];
+  totalSyllables=SCALED.lines.reduce((a,l)=>a+l.syllables.length,0);
+  updateHUD();
+  document.getElementById('assembly').innerHTML='';
+  document.querySelectorAll('#play-area .tile').forEach(e=>e.remove());
+  buildTimeline();
+  document.getElementById('tl-content').style.transform='translateX(0px)';
+  document.getElementById('game-screen').style.display='flex';
+  startTime=performance.now();
+  gameRunning=true;
+  animFrame=requestAnimationFrame(gameLoop);
+}
+
+function endGame(){
+  gameRunning=false;
+  if(animFrame) cancelAnimationFrame(animFrame);
+  document.getElementById('game-screen').style.display='none';
+  showResults();
+}
+
+function showResults(){
+  const maxScore=totalSyllables*SCORES.perfect;
+  const pct=maxScore>0?Math.round(score/maxScore*100):0;
+  let grade,cls;
+  if(pct>=95){grade='S';cls='grade-s';}
+  else if(pct>=85){grade='A';cls='grade-a';}
+  else if(pct>=70){grade='B';cls='grade-b';}
+  else if(pct>=55){grade='C';cls='grade-c';}
+  else{grade='D';cls='grade-d';}
+  document.getElementById('result-grade').textContent=grade;
+  document.getElementById('result-grade').className='grade '+cls;
+  document.getElementById('result-score').textContent=score+' / '+maxScore;
+  document.getElementById('result-accuracy').textContent=pct+'% accuracy';
+  document.getElementById('r-perfect').textContent=counts.perfect;
+  document.getElementById('r-good').textContent=counts.good;
+  document.getElementById('r-ok').textContent=counts.ok;
+  document.getElementById('r-miss').textContent=counts.miss;
+  document.getElementById('result-wrong').textContent=
+    wrongTaps>0?'Wrong-order taps: '+wrongTaps:'No wrong-order taps!';
+  document.getElementById('result-combo').textContent='Best combo: '+maxCombo+'×';
+  document.getElementById('results-screen').style.display='flex';
+}
+
+function resetGame(){
+  document.getElementById('results-screen').style.display='none';
+  document.getElementById('start-screen').style.display='flex';
+}
+</script>
+</body>
+</html>
