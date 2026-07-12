@@ -625,13 +625,41 @@ textarea{min-height:130px;line-height:1.7}
 #rhythm-overlay{position:fixed;inset:0;z-index:900;display:none;flex-direction:column;
   background:#070b14;color:#e2e8f0;font-family:'Crimson Pro',sans-serif;
   --rgh:#06b6d4;--rgp:#fbbf24;--rgg:#34d399;--rgo:#60a5fa;--rgm:#f87171;
-  --rgt:#1a2236;--rgtb:#2a3a5c;overflow:hidden;touch-action:manipulation;
+  --rgt:#1a2236;--rgtb:#2a3a5c;--rgm2:#e879f9;overflow:hidden;touch-action:manipulation;
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 #rhythm-overlay.open{display:flex}
 #rg-flash{position:absolute;inset:0;pointer-events:none;z-index:1;opacity:0;
   background:radial-gradient(ellipse at 50% 60%,#06b6d40a 0%,transparent 65%)}
 #rg-flash.bp{animation:rgFlashP .32s ease-out}
+#rg-flash.bp2{animation:rgFlashP2 .32s ease-out}
 @keyframes rgFlashP{0%{opacity:1}100%{opacity:0}}
+@keyframes rgFlashP2{0%{opacity:1}100%{opacity:0}}
+#rg-flash.hue2{background:radial-gradient(ellipse at 50% 60%,#e879f90a 0%,transparent 65%)}
+#rg-lasers{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:.17;
+  display:none;overflow:hidden}
+#rg-lasers.show{display:block}
+#rg-lasers i{position:absolute;top:-25%;height:150%;width:3px;
+  background:linear-gradient(180deg,transparent 0%,var(--rgh) 40%,var(--rgh) 60%,transparent 100%);
+  transform-origin:50% 0;border-radius:2px;box-shadow:0 0 12px var(--rgh)}
+#rg-lasers i:nth-child(2n){background:linear-gradient(180deg,transparent 0%,var(--rgm2) 40%,var(--rgm2) 60%,transparent 100%);
+  box-shadow:0 0 12px var(--rgm2)}
+#rg-lasers i:nth-child(1){left:12%;animation:rgSweep1 7s ease-in-out infinite}
+#rg-lasers i:nth-child(2){left:30%;animation:rgSweep2 9s ease-in-out infinite}
+#rg-lasers i:nth-child(3){left:50%;animation:rgSweep1 8s ease-in-out infinite reverse}
+#rg-lasers i:nth-child(4){left:70%;animation:rgSweep2 6.5s ease-in-out infinite}
+#rg-lasers i:nth-child(5){left:88%;animation:rgSweep1 10s ease-in-out infinite reverse}
+@keyframes rgSweep1{0%,100%{transform:rotate(-32deg)}50%{transform:rotate(30deg)}}
+@keyframes rgSweep2{0%,100%{transform:rotate(26deg)}50%{transform:rotate(-34deg)}}
+.rg-ripple{position:fixed;border-radius:50%;pointer-events:none;z-index:940;
+  width:60px;height:60px;transform:translate(-50%,-50%) scale(0);
+  animation:rgRip .7s ease-out forwards}
+.rg-ripple.big{animation:rgRipBig .9s ease-out forwards}
+@keyframes rgRip{0%{transform:translate(-50%,-50%) scale(0);opacity:.4}
+  100%{transform:translate(-50%,-50%) scale(18);opacity:0}}
+@keyframes rgRipBig{0%{transform:translate(-50%,-50%) scale(0);opacity:.55}
+  100%{transform:translate(-50%,-50%) scale(42);opacity:0}}
+.rg-conf{position:fixed;width:9px;height:14px;pointer-events:none;z-index:990;
+  transition:transform 1.5s cubic-bezier(.2,.7,.3,1),opacity 1.5s ease}
 .rg-panel{position:absolute;inset:0;z-index:20;display:none;flex-direction:column;
   align-items:center;justify-content:center;background:#070b14;padding:20px;text-align:center}
 .rg-panel.open{display:flex}
@@ -675,7 +703,9 @@ textarea{min-height:130px;line-height:1.7}
 #rg-rail{position:absolute;top:50%;left:0;right:0;height:2px;background:#1e293b;
   transform:translateY(-50%)}
 #rg-rail.bp{animation:rgRailP .3s ease-out}
+#rg-rail.bp2{animation:rgRailP2 .3s ease-out}
 @keyframes rgRailP{0%{box-shadow:0 0 10px #06b6d450}100%{box-shadow:none}}
+@keyframes rgRailP2{0%{box-shadow:0 0 10px #e879f950}100%{box-shadow:none}}
 #rg-tlc{position:absolute;top:0;bottom:0;left:0;will-change:transform}
 .rg-beat{position:absolute;top:32%;bottom:32%;width:1px;background:#2a3a5c45}
 .rg-beat.down{top:22%;bottom:22%;width:2px;background:#3b4f7a70}
@@ -688,7 +718,7 @@ textarea{min-height:130px;line-height:1.7}
 .rg-note.hit-ok{background:var(--rgo);box-shadow:0 0 8px #60a5fa40}
 .rg-note.hit-miss{background:var(--rgm);opacity:.4}
 #rg-ph{position:absolute;top:6px;bottom:6px;width:2px;left:30%;background:#fff;
-  z-index:6;box-shadow:0 0 8px #ffffff60,0 0 16px #ffffff25}
+  z-index:6;box-shadow:0 0 8px var(--rgh),0 0 18px #e879f960}
 #rg-area{flex:1;position:relative;min-height:0;overflow:hidden;z-index:5}
 .rg-tile{position:absolute;height:48px;min-width:48px;padding:0 13px;display:flex;
   align-items:center;justify-content:center;background:var(--rgt);
@@ -739,7 +769,20 @@ textarea{min-height:130px;line-height:1.7}
 .rg-stat.sp .c{color:var(--rgp)}.rg-stat.sg .c{color:var(--rgg)}
 .rg-stat.so .c{color:var(--rgo)}.rg-stat.sm .c{color:var(--rgm)}
 #rg-rwrong,#rg-rcombo{font-size:.82rem;color:#64748b;margin-bottom:6px}
-#rg-ref-line{font-size:1.15rem;margin:12px 0 6px;max-width:480px;line-height:1.9}
+#rg-mult{font-size:.92rem;color:#94a3b8;margin-bottom:4px}
+#rg-mult b{color:var(--rgp)}
+#rg-newhigh{display:none;font-family:'Special Elite',cursive;color:var(--rgp);
+  font-size:1.05rem;margin:6px 0;letter-spacing:.08em;
+  text-shadow:0 0 16px #fbbf2460;animation:rgHigh 1s ease-in-out infinite alternate}
+#rg-newhigh.show{display:block}
+@keyframes rgHigh{from{transform:scale(1)}to{transform:scale(1.07)}}
+#rg-hist{font-size:.78rem;color:#64748b;margin-bottom:14px}
+#rg-hist b{color:#94a3b8}
+.rg-modebtn .best{display:block;font-family:'Crimson Pro',serif;font-size:.7rem;
+  color:var(--rgp);letter-spacing:0;margin-top:2px;opacity:.85}
+#rg-ref-line{font-size:clamp(.95rem,4.2vw,1.15rem);margin:12px 0 6px;
+  max-width:min(480px,92vw);line-height:1.9;overflow-wrap:break-word;padding:0 8px}
+#rg-ref-line .sep{color:#33415560}
 #rg-ref-line .cur{background:#06b6d435;border-radius:4px;padding:1px 3px;color:#fff}
 #rg-ref-line .done-syl{color:var(--rgg)}
 #rg-ref-prog{font-size:.8rem;color:#64748b;margin-bottom:14px}
@@ -760,8 +803,11 @@ textarea{min-height:130px;line-height:1.7}
   font-family:'Special Elite',cursive;font-size:5rem;color:var(--rgh);display:none;
   text-shadow:0 0 30px #06b6d460}
 #rg-count.show{display:block}
-#rg-line{display:none;padding:10px 18px 6px;text-align:center;font-size:1.25rem;
-  line-height:2.1;max-height:120px;overflow:hidden;border-bottom:1px solid #1e293b20}
+#rg-line{display:none;padding:10px 14px 6px;text-align:center;
+  font-size:clamp(.95rem,4.2vw,1.25rem);
+  line-height:2.1;max-height:150px;overflow:hidden;border-bottom:1px solid #1e293b20;
+  overflow-wrap:break-word}
+#rg-line .sep{color:#33415560;padding:0}
 #rg-line.show{display:block}
 #rg-line span{padding:1px 4px;border-radius:5px;color:#475569;transition:all .15s}
 #rg-line .cur{background:#06b6d435;color:#fff;box-shadow:0 0 10px #06b6d430}
@@ -771,11 +817,23 @@ textarea{min-height:130px;line-height:1.7}
 #rg-line .j-miss{color:var(--rgm);opacity:.55}
 #rg-play:active{background:var(--rgh);color:#070b14}
 #rg-tap-big{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);
-  width:170px;height:170px;border-radius:50%;border:3px solid var(--rgh);
-  background:#06b6d415;color:var(--rgh);font-family:'Special Elite',cursive;
-  font-size:1.2rem;letter-spacing:.1em;cursor:pointer;display:none;z-index:12}
+  width:190px;height:190px;border-radius:50%;border:3px solid var(--rgh);
+  background:radial-gradient(circle at 50% 42%, #0e1a2e 0%, #070b14 70%);
+  color:var(--rgh);font-family:'Special Elite',cursive;
+  font-size:1.2rem;letter-spacing:.14em;cursor:pointer;display:none;z-index:12;
+  box-shadow:0 0 22px #06b6d435, inset 0 0 30px #06b6d415}
 #rg-tap-big.show{display:block}
-#rg-tap-big:active{background:var(--rgh);color:#070b14;transform:translate(-50%,-50%) scale(.95)}
+#rg-tap-big:active{transform:translate(-50%,-50%) scale(.95)}
+#rg-jog{position:absolute;inset:11px;border-radius:50%;
+  border:3px dashed var(--rgm2);pointer-events:none;
+  box-shadow:0 0 14px #e879f940, inset 0 0 14px #e879f925;
+  animation:rgSpin 9s linear infinite}
+#rg-jog.kick{animation:rgSpin .9s linear infinite}
+@keyframes rgSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+#rg-tap-big.bigpulse{animation:rgBigPulse .5s ease-out}
+@keyframes rgBigPulse{0%{box-shadow:0 0 22px #06b6d435}
+  35%{box-shadow:0 0 60px #fbbf2470,0 0 120px #e879f950;transform:translate(-50%,-50%) scale(1.08)}
+  100%{box-shadow:0 0 22px #06b6d435;transform:translate(-50%,-50%) scale(1)}}
 .rg-modebtn{display:block;width:250px;margin:6px auto;font-family:'Special Elite',cursive;
   font-size:.95rem;padding:13px 20px;border:2px solid var(--rgh);border-radius:14px;
   background:transparent;color:var(--rgh);cursor:pointer;letter-spacing:.08em}
@@ -1073,6 +1131,7 @@ textarea{min-height:130px;line-height:1.7}
 
 <div id="rhythm-overlay">
   <div id="rg-flash"></div>
+  <div id="rg-lasers"><i></i><i></i><i></i><i></i><i></i></div>
   <button id="rg-close">✕</button>
 
   <!-- start panel -->
@@ -1086,9 +1145,11 @@ textarea{min-height:130px;line-height:1.7}
       The real recording plays along — feel the beat, then tap it.
     </p>
     <button class="rg-modebtn" id="rg-mode-tap">🎵 Tap-along
-      <span class="d">one button — tap every syllable as it's sung</span></button>
+      <span class="d">one button — tap every syllable as it's sung</span>
+      <span class="best" id="rg-best-tap"></span></button>
     <button class="rg-modebtn" id="rg-mode-tiles">🧩 Tile Tap
-      <span class="d">find &amp; tap the scattered syllable tiles in order</span></button>
+      <span class="d">find &amp; tap the scattered syllable tiles in order</span>
+      <span class="best" id="rg-best-tiles"></span></button>
     <button class="rg-ghostbtn" id="rg-refine-btn">⏱ Refine rhythm (tap syllables)</button>
     <div class="rg-opt">
       <label>Tempo</label>
@@ -1107,6 +1168,7 @@ textarea{min-height:130px;line-height:1.7}
     <div id="rg-ref-line"></div>
     <button id="rg-ref-tap">TAP</button>
     <div>
+      <button class="rg-ghostbtn" id="rg-ref-back">←</button>
       <button class="rg-ghostbtn" id="rg-ref-restart">↺ Restart line</button>
       <button class="rg-ghostbtn" id="rg-ref-cancel">Cancel</button>
     </div>
@@ -1123,8 +1185,11 @@ textarea{min-height:130px;line-height:1.7}
       <div class="rg-stat so"><div class="c" id="rg-ro">0</div><div class="l">OK</div></div>
       <div class="rg-stat sm"><div class="c" id="rg-rm">0</div><div class="l">Miss</div></div>
     </div>
+    <div id="rg-newhigh">🎉 NEW HIGH SCORE! 🎉</div>
+    <div id="rg-mult"></div>
     <div id="rg-rwrong"></div>
     <div id="rg-rcombo"></div>
+    <div id="rg-hist"></div>
     <div>
       <button class="rg-bigbtn" id="rg-retry-btn">Retry</button>
       <button class="rg-ghostbtn" id="rg-exit-btn">Back to song</button>
@@ -1145,7 +1210,7 @@ textarea{min-height:130px;line-height:1.7}
     <div id="rg-ph"></div>
   </div>
   <div id="rg-area">
-    <button id="rg-tap-big">TAP</button>
+    <button id="rg-tap-big"><span id="rg-jog"></span>TAP</button>
   </div>
   <button id="rg-play">▶</button>
   <div id="rg-count"></div>
@@ -4426,11 +4491,46 @@ function rgTone(j){
   g.gain.exponentialRampToValueAtTime(.001,rgACtx.currentTime+.13);
   o.start();o.stop(rgACtx.currentTime+.13);
 }
+function rgRipple(x,y,color,big){
+  const r=document.createElement('div');
+  r.className='rg-ripple'+(big?' big':'');
+  r.style.left=x+'px'; r.style.top=y+'px';
+  r.style.background='radial-gradient(circle, '+color+'40 0%, '+color+'18 45%, transparent 70%)';
+  r.style.border='1.5px solid '+color+'55';
+  document.body.appendChild(r);
+  setTimeout(()=>r.remove(), big?950:750);
+}
+function rgConfetti(grand){
+  const colors=['#06b6d4','#e879f9','#fbbf24','#34d399','#f8fafc','#60a5fa'];
+  const n=grand?150:55;
+  const cx=window.innerWidth/2, cy=window.innerHeight*0.35;
+  for(let i=0;i<n;i++){
+    const p=document.createElement('div');
+    p.className='rg-conf';
+    p.style.background=colors[i%colors.length];
+    p.style.left=cx+'px'; p.style.top=cy+'px';
+    p.style.borderRadius=Math.random()<.4?'50%':'2px';
+    document.body.appendChild(p);
+    const a=Math.random()*Math.PI*2;
+    const d=(grand?140:80)+Math.random()*(grand?420:220);
+    const dx=Math.cos(a)*d, dy=Math.sin(a)*d*0.7 + (grand?260:180)+Math.random()*200;
+    const rot=(Math.random()*720-360);
+    requestAnimationFrame(()=>{
+      p.style.transform='translate('+dx+'px,'+dy+'px) rotate('+rot+'deg)';
+      p.style.opacity='0';
+    });
+    setTimeout(()=>p.remove(),1600);
+  }
+}
+let rgHue=false;
 function rgPulse(){
+  rgHue=!rgHue;
   document.querySelectorAll('.rg-tile.charge-1,.rg-tile.charge-2,.rg-tile.charge-3').forEach(el=>{
     el.classList.remove('bp'); void el.offsetWidth; el.classList.add('bp'); });
-  const r=$('rg-rail'); r.classList.remove('bp'); void r.offsetWidth; r.classList.add('bp');
-  const f=$('rg-flash'); f.classList.remove('bp'); void f.offsetWidth; f.classList.add('bp');
+  const r=$('rg-rail'); r.classList.remove('bp','bp2'); void r.offsetWidth;
+  r.classList.add(rgHue?'bp2':'bp');
+  const f=$('rg-flash'); f.classList.remove('bp','bp2'); void f.offsetWidth;
+  f.classList.toggle('hue2',rgHue); f.classList.add(rgHue?'bp2':'bp');
 }
 function rgFlashTxt(j,x,y){
   const el=document.createElement('div'); el.className='rg-tf';
@@ -4522,9 +4622,10 @@ function rgPlaceWord(W){
     ri=best;
     const iv=rgRows[ri].intervals.slice().sort((a,b)=>a.x0-b.x0);
     x0=iv.length?iv[iv.length-1].x1:0;
+    x0=Math.max(0, Math.min(x0, rgZone.zw-width)); // never overflow the zone
   }
   rgRows[ri].intervals.push({x0, x1:x0+width, w:W[0].word});
-  return {y:rgRows[ri].y, x0:x0+RG_WORDPAD};
+  return {y:rgRows[ri].y, x0:rgZone.ox+x0+RG_WORDPAD};
 }
 function rgReleaseWord(wIdx){
   rgRows.forEach(row=>{
@@ -4589,7 +4690,7 @@ function rgLineRender(){
     if(s.resolved) cls='j-'+s.judgment;
     else if(s===exp) cls='cur';
     return '<span class="'+cls+'">'+esc(s.t)+'</span>';
-  }).join('·');
+  }).join('<span class="sep"> · </span>');
 }
 function rgSetChunk(ci){
   if(ci===rgChunk) return;
@@ -4607,8 +4708,18 @@ function rgPress(s){
   if(!rgRun||s.resolved||s.holding||rgMode!=='tiles') return;
   const now=rgNow(), exp=rgExpected();
   if(s!==exp){
-    s.el.classList.remove('wrong'); void s.el.offsetWidth; s.el.classList.add('wrong');
-    rgTone('wrong'); rgWrong++; rgComboV=0; rgHud(); return;
+    // Catch-up: if this tile's own moment has arrived, skip the stragglers
+    const idx=rgData.all.indexOf(s);
+    if(idx>rgPtr && (s.time-now)*1000<=RG_OMS){
+      for(let i=rgPtr;i<idx;i++){
+        const p=rgData.all[i];
+        if(!p.resolved && !p.holding) rgResolve(p,'miss');
+      }
+      // fall through: s is now the expected tile
+    } else {
+      if(s.el){ s.el.classList.remove('wrong'); void s.el.offsetWidth; s.el.classList.add('wrong'); }
+      rgTone('wrong'); rgWrong++; rgComboV=0; rgHud(); return;
+    }
   }
   const dMs=Math.abs(now-s.time)*1000;
   if(now<s.time && dMs>RG_OMS){
@@ -4642,12 +4753,24 @@ function rgTapAlong(){
   if(!rgRun||rgMode!=='tap') return;
   const now=rgNow();
   const s=rgExpected(); if(!s) return;
+  const jog=$('rg-jog');
+  if(jog){ jog.classList.add('kick'); setTimeout(()=>jog.classList.remove('kick'),450); }
+  const big=$('rg-tap-big');
+  const br=big.getBoundingClientRect();
+  const bx=br.left+br.width/2, by=br.top+br.height/2;
   const early=s.time-now;
   if(early > 0.35){ // before the syllable's window opens
-    rgTone('wrong'); rgComboV=0; rgHud(); return;
+    rgTone('wrong'); rgComboV=0; rgHud();
+    rgRipple(bx,by,'#f87171',false);
+    return;
   }
   const dMs=Math.abs(now-s.time)*1000;
   const j = dMs<=200 ? 'perfect' : 'good'; // anywhere in the sung span = good
+  const col={perfect:'#fbbf24',good:'#34d399'}[j];
+  rgRipple(bx,by,col,j==='perfect');
+  if(j==='perfect'){
+    big.classList.remove('bigpulse'); void big.offsetWidth; big.classList.add('bigpulse');
+  }
   rgResolve(s,j);
 }
 
@@ -4670,7 +4793,10 @@ function rgResolve(s,j){
       rgFly(s,j); rgTone(j);
       const r=s.el.getBoundingClientRect();
       rgFlashTxt(j,r.left+r.width/2,r.top-6);
-      if(j==='perfect') rgParticles(r.left+r.width/2,r.top+r.height/2,7);
+      if(j==='perfect'){
+        rgParticles(r.left+r.width/2,r.top+r.height/2,7);
+        rgRipple(r.left+r.width/2,r.top+r.height/2,'#fbbf24',false);
+      }
       rgFreeTile(s,430);
     } else {
       rgTone(j);
@@ -4779,6 +4905,7 @@ function rgOpen(){
   $('rg-song-lbl').textContent=song.title;
   document.getElementById('rhythm-overlay').classList.add('open');
   rgShowPanel('rg-start-panel');
+  rgLoadBests();
 }
 function rgShowPanel(id){
   ['rg-start-panel','rg-refine-panel','rg-results-panel'].forEach(p=>
@@ -4837,6 +4964,7 @@ function rgGo(){
   if(!rgVideo){ rgBase=rgData.t0-3; rgReal0=performance.now(); }
   rgRun=true;
   $('rg-pause').classList.add('show');
+  $('rg-lasers').classList.add('show');
   rgRAF=requestAnimationFrame(rgLoop);
 }
 function rgPauseGame(){
@@ -4846,6 +4974,7 @@ function rgPauseGame(){
   rgPauseT=rgNow();
   if(rgVideo){ try{ ytPlayer.pauseVideo(); }catch(e){} }
   $('rg-pause').classList.remove('show');
+  $('rg-lasers').classList.remove('show');
   $('rg-play').classList.add('show');
 }
 function rgCountdown(done){
@@ -4866,16 +4995,41 @@ function rgResume(){
   }
   rgPaused=false; rgRun=true;
   $('rg-pause').classList.add('show');
+  $('rg-lasers').classList.add('show');
   rgRAF=requestAnimationFrame(rgLoop);
 }
 function rgStop(){
   rgRun=false; rgPaused=false;
   $('rg-pause').classList.remove('show');
   $('rg-count').classList.remove('show');
+  $('rg-lasers').classList.remove('show');
   if(rgRAF) cancelAnimationFrame(rgRAF);
   if(rgVideo){ try{ ytPlayer.pauseVideo(); if(ytPlayer.setPlaybackRate) ytPlayer.setPlaybackRate(1);}catch(e){} }
 }
-function rgFinish(){
+async function rgSaveScore(finalScore){
+  const all=(await store.get('rg-scores'))||{};
+  const sid=song.id||song.title;
+  if(!all[sid]) all[sid]={};
+  if(!all[sid][rgMode]) all[sid][rgMode]={hist:[],best:0};
+  const e=all[sid][rgMode];
+  const isHigh = finalScore>e.best;
+  const hadPrevious = e.hist.length>0;
+  e.hist.unshift(finalScore);
+  e.hist=e.hist.slice(0,4);
+  if(isHigh) e.best=finalScore;
+  await store.set('rg-scores',all);
+  return {isHigh, hadPrevious, e};
+}
+async function rgLoadBests(){
+  try{
+    const all=(await store.get('rg-scores'))||{};
+    const sid=song.id||song.title;
+    const d=all[sid]||{};
+    $('rg-best-tap').textContent = d.tap&&d.tap.best ? 'Best: '+d.tap.best.toLocaleString() : '';
+    $('rg-best-tiles').textContent = d.tiles&&d.tiles.best ? 'Best: '+d.tiles.best.toLocaleString() : '';
+  }catch(e){}
+}
+async function rgFinish(){
   rgStop();
   $('rg-tap-big').classList.remove('show');
   $('rg-line').classList.remove('show');
@@ -4885,14 +5039,26 @@ function rgFinish(){
   if(pct>=95){g='S';cl='g-s';}else if(pct>=85){g='A';cl='g-a';}
   else if(pct>=70){g='B';cl='g-b';}else if(pct>=55){g='C';cl='g-c';}
   else{g='D';cl='g-d';}
+  const mult=Math.max(1,rgMaxCombo);
+  const finalScore=rgScoreV*mult;
   $('rg-grade').textContent=g; $('rg-grade').className='rg-grade '+cl;
-  $('rg-rscore').textContent=rgScoreV+' / '+max;
+  $('rg-rscore').textContent=finalScore.toLocaleString();
   $('rg-racc').textContent=pct+'% accuracy';
+  $('rg-mult').innerHTML=rgScoreV.toLocaleString()+' × <b>'+mult+'× combo</b> = '+finalScore.toLocaleString();
   $('rg-rp').textContent=rgCounts.perfect; $('rg-rg').textContent=rgCounts.good;
   $('rg-ro').textContent=rgCounts.ok; $('rg-rm').textContent=rgCounts.miss;
   $('rg-rwrong').textContent=rgWrong>0?'Wrong-order taps: '+rgWrong:'No wrong-order taps!';
   $('rg-rcombo').textContent='Best combo: '+rgMaxCombo+'×';
+  let isHigh=false, hadPrevious=false, e=null;
+  try{ const r=await rgSaveScore(finalScore); isHigh=r.isHigh; hadPrevious=r.hadPrevious; e=r.e; }catch(err){}
+  const grand = isHigh && hadPrevious;   // grand only when beating a real previous score
+  $('rg-newhigh').classList.toggle('show', grand);
+  if(e){
+    $('rg-hist').innerHTML='Recent: '+e.hist.map(s=>s.toLocaleString()).join(' · ')
+      +' &nbsp;|&nbsp; <b>Best: '+e.best.toLocaleString()+'</b>';
+  } else { $('rg-hist').textContent=''; }
   rgShowPanel('rg-results-panel');
+  rgConfetti(grand);
 }
 function rgClose(){
   rgStop();
@@ -4921,7 +5087,7 @@ function rgRefRender(){
   const syls=rgRefSyls[rgRefLi];
   $('rg-ref-line').innerHTML=syls.map((s,i)=>
     '<span class="'+(i<rgRefSi?'done-syl':i===rgRefSi?'cur':'')+'">'+esc(s)+'</span>'
-  ).join('·');
+  ).join('<span class="sep"> · </span>');
 }
 function rgRefTap(){
   if(ytState!=='ready') return;
@@ -4945,6 +5111,17 @@ async function rgRefDone(){
   toast('Rhythm refined ✓');
   rgData=rgBuildData();
   rgShowPanel('rg-start-panel');
+}
+function rgRefBack(){
+  if(rgRefLi===0 && rgRefSi===0) return;
+  if(rgRefSi>0 || rgRefLi===0){
+    rgRefTimes[rgRefLi]=[]; rgRefSi=0;   // redo current line
+  } else {
+    rgRefLi--; rgRefTimes[rgRefLi]=[]; rgRefSi=0;  // step back a line
+  }
+  rgRefRender();
+  const L=rgRefFlat[rgRefLi];
+  try{ ytPlayer.seekTo(Math.max(0,L.start-1),true); ytPlayer.playVideo(); }catch(e){}
 }
 function rgRefRestart(){
   rgRefTimes[rgRefLi]=[]; rgRefSi=0; rgRefRender();
@@ -4970,11 +5147,12 @@ $('rg-pause').addEventListener('click', rgPauseGame);
   big.addEventListener('touchstart',h,{passive:false});
   big.addEventListener('mousedown',h);
 })();
-$('rg-retry-btn').addEventListener('click', ()=>{ rgShowPanel('rg-start-panel'); });
+$('rg-retry-btn').addEventListener('click', ()=>{ rgShowPanel('rg-start-panel'); rgLoadBests(); });
 $('rg-exit-btn').addEventListener('click', rgClose);
 $('rg-refine-btn').addEventListener('click', rgRefineStart);
 $('rg-ref-tap').addEventListener('click', rgRefTap);
 $('rg-ref-restart').addEventListener('click', rgRefRestart);
+$('rg-ref-back').addEventListener('click', rgRefBack);
 $('rg-ref-cancel').addEventListener('click', rgRefCancel);
 $('rg-tempo').addEventListener('input', function(){ $('rg-tempo-lbl').textContent=this.value+'%'; });
 
