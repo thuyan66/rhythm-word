@@ -2269,7 +2269,7 @@ function playQuizAudio(text, videoId, start, end, cb){
     const play = ()=> playSegment(start, end, cb);
     if(ytState==='ready'){
       if(_quizVideoId===videoId){ play(); return; }
-      _quizVideoId = videoId;
+      _quizVideoId = videoId; ytLoadedId = videoId;
       try{ ytPlayer.loadVideoById({videoId, startSeconds:start}); }
       catch(e){ speakFi(text, cb); return; }
       setTimeout(play, 500); // brief delay for the video switch to take effect
@@ -3016,10 +3016,11 @@ function validateReview(){
 
 // ═══════ YOUTUBE — LOADER, SEGMENTS, TAP-ALONG TAGGER ═══════
 let ytPlayer=null, ytState='unloaded'; // unloaded|loading|ready|failed
+let ytLoadedId=null; // videoId currently loaded in the player
 let segTimer=null;
 
 function loadYT(videoId, cb){
-  if(ytState==='ready'){ ytPlayer.loadVideoById(videoId); cb(true); return }
+  if(ytState==='ready'){ ytPlayer.loadVideoById(videoId); ytLoadedId=videoId; cb(true); return }
   if(ytState==='failed'){ cb(false); return }
   ytState='loading';
   const fail = ()=>{ if(ytState!=='ready'){ ytState='failed'; cb(false); } };
@@ -3029,7 +3030,7 @@ function loadYT(videoId, cb){
       ytPlayer = new YT.Player('yt-player', {
         videoId, playerVars:{ playsinline:1, rel:0 },
         events:{
-          onReady:()=>{ clearTimeout(t); ytState='ready'; cb(true); },
+          onReady:()=>{ clearTimeout(t); ytState='ready'; ytLoadedId=videoId; cb(true); },
           onError:()=>{ clearTimeout(t); fail(); }
         }
       });
@@ -4462,9 +4463,18 @@ function startGame(){
   $('song-title-lbl').textContent = song.title + ' · ' + song.language;
   showScreen('game-screen');
   updateSharePill();
-  if(song.videoId && ytState==='unloaded'){
-    // load in background; playLine() checks availability live, so no restart needed
-    loadYT(song.videoId, ok=>{ if(!ok) toast('Video unavailable here — using spoken audio'); });
+  if(song.videoId){
+    if(ytState==='unloaded'){
+      // load in background; playLine() checks availability live, so no restart needed
+      loadYT(song.videoId, ok=>{ if(!ok) toast('Video unavailable here — using spoken audio'); });
+    } else if(ytState==='ready' && ytLoadedId !== song.videoId){
+      // different song chosen — swap the video (cue = no autoplay)
+      try{
+        ytPlayer.cueVideoById(song.videoId);
+        ytLoadedId = song.videoId;
+        _quizVideoId = song.videoId;
+      }catch(e){ /* playLine falls back to TTS if the cue failed */ }
+    }
   }
   startVerse();
   rgUpdateWinBtn();
@@ -5657,12 +5667,20 @@ function rgQPTick(){
   let t;
   try{ t = ytPlayer.getCurrentTime(); }catch(e){ return; }
   const rounds = rgQP.rounds;
+  // Latest line whose start we've reached — handles overlapping/contiguous
+  // timestamps and keeps the round answerable through instrumental gaps.
   let activeIdx = -1;
   for(let i=0;i<rounds.length;i++){
-    if(t >= rounds[i].line.start - 0.3 && t < rounds[i].line.end){ activeIdx=i; break; }
+    if(t >= rounds[i].line.start - 0.3) activeIdx = i;
   }
   if(activeIdx !== rgQP.roundIdx){
-    if(rgQP.roundIdx >= 0){ const prev = rounds[rgQP.roundIdx]; if(!prev.resolved){ prev.resolved=true; rgQP.misses++; rgQP.streak=0; rgQPHud(); } }
+    // Resolve every unresolved round we've moved past (handles seeks/skips too)
+    let missed=false;
+    for(let i=0;i<activeIdx;i++){
+      const r=rounds[i];
+      if(!r.resolved){ r.resolved=true; rgQP.misses++; rgQP.streak=0; missed=true; }
+    }
+    if(missed) rgQPHud();
     if(activeIdx >= 0){ rgQP.roundIdx=activeIdx; rgQPShowRound(rounds[activeIdx]); }
   }
   // Per-line timer
