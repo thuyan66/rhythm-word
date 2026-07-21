@@ -300,6 +300,18 @@ textarea{min-height:130px;line-height:1.7}
 #yt-wrap{width:100%;aspect-ratio:16/9;background:#000;border:1.5px solid var(--brass-dark);
   border-radius:4px;overflow:hidden;margin-bottom:12px}
 #yt-wrap iframe{width:100%;height:100%}
+#yt-wrap.audio-only{aspect-ratio:auto;height:auto;min-height:0;background:transparent;border:none;
+  display:flex;align-items:center;justify-content:center;padding:6px 0}
+audio.file-audio-visible{width:100%;display:block}
+#yt-wrap audio{display:none}
+#yt-wrap.audio-only audio.file-audio-visible{display:block}
+.src-tabs{display:flex;gap:8px;margin-bottom:8px}
+.src-tab{flex:1;padding:9px 8px;border-radius:9px;cursor:pointer;font:inherit;font-size:.85rem;
+  border:1.5px solid var(--brass-dark);background:transparent;color:var(--ink2)}
+.src-tab.active{background:var(--brass-dark);color:#fff;font-weight:600}
+#audio-pick-info{margin-top:6px}
+#audio-pick-info.ok{color:var(--brass-dark);font-weight:600}
+#audio-pick-info.bad{color:#c0392b;font-weight:600}
 #yt-unavailable{padding:2rem 1rem;text-align:center;color:#cfc4a5;font-style:italic;font-size:.95rem}
 #tag-cur{background:#f6f0df;border:1.5px solid var(--brass);border-radius:4px;
   padding:12px 14px;margin-bottom:10px;text-align:center}
@@ -1107,8 +1119,21 @@ textarea{min-height:130px;line-height:1.7}
     <div class="f-label">Translations <span class="opt">— optional, aligned line by line; used as guides in the reading &amp; typing levels</span></div>
     <textarea id="in-trans" style="min-height:90px" placeholder="(optional)"></textarea>
 
-    <div class="f-label">Music video <span class="opt">— optional YouTube URL for real sung audio</span></div>
-    <input type="text" id="in-video" placeholder="https://www.youtube.com/watch?v=...">
+    <div class="f-label">Audio source <span class="opt">— optional; pick one. Chosen once at import.</span></div>
+    <div class="src-tabs">
+      <button type="button" class="src-tab active" id="src-tab-yt" data-src="yt">▶ YouTube</button>
+      <button type="button" class="src-tab" id="src-tab-file" data-src="file">🎵 Audio file</button>
+    </div>
+
+    <div id="src-pane-yt">
+      <input type="text" id="in-video" placeholder="https://www.youtube.com/watch?v=...">
+    </div>
+
+    <div id="src-pane-file" class="hidden">
+      <input type="file" id="in-audio" accept="audio/*" style="display:none">
+      <button type="button" class="btn btn-ghost" id="pick-audio-btn" style="width:100%">Choose an audio file…</button>
+      <div id="audio-pick-info" class="f-hint"></div>
+    </div>
 
     <div class="f-hint">Finnish morphology runs offline in your browser. The first import downloads a one-time ~4 MB language pack, then works with no connection.</div>
 
@@ -1849,7 +1874,9 @@ function showPetalPopup(meta){
   const delBtn = document.createElement('button'); delBtn.className='pp-del'; delBtn.textContent='✕ Delete';
   delBtn.addEventListener('click', async ()=>{
     songsIndex = songsIndex.filter(m=>m.id!==meta.id);
-    await saveIndex(); await store.del('song:'+meta.id);
+    await saveIndex();
+    try{ await adbDel(audioKeyFor(meta.id)); }catch(e){}
+    await store.del('song:'+meta.id);
     const prog = await loadGardenProgress(); delete prog[meta.id]; await store.set('garden-progress',prog);
     renderHome();
   });
@@ -2195,7 +2222,7 @@ async function aggregateVerbs(){
         const songKey = (meta.title||'').trim().toLowerCase();
         if(line.text && !verbs[key].seen.has(songKey)){
           verbs[key].seen.add(songKey);
-          verbs[key].sentences.push({ text:line.text, surface:vb.surface, song:meta.title, english:line.english||'', roman:line.roman||null, videoId:s.videoId||null, start:line.start, end:line.end });
+          verbs[key].sentences.push({ text:line.text, surface:vb.surface, song:meta.title, english:line.english||'', roman:line.roman||null, videoId:s.videoId||null, audioKey:s.audioKey||null, start:line.start, end:line.end });
         }
       });
     }));
@@ -2263,11 +2290,23 @@ async function renderLibrary(){
 // ── Library Quiz — 9 types with YouTube audio support ──
 // Play quiz audio: prefer YouTube segment, fallback to TTS
 let _quizVideoId = null;
-function playQuizAudio(text, videoId, start, end, cb){
+function playQuizAudio(text, videoId, start, end, cb, audioKey){
   stopAudio(); // stop any playing segment/TTS first
+  // Uploaded-audio songs: load the blob, then play the segment via AUD.
+  if(audioKey && start!=null && end!=null){
+    if(fileState==='ready' && fileLoadedKey===audioKey){ audUse('file'); playSegment(start, end, cb); return; }
+    adbGet(audioKey).then(blob=>{
+      if(!blob){ speakFi(text, cb); return; }
+      fileAttach(blob, audioKey).then(ok=>{
+        if(ok){ audUse('file'); playSegment(start, end, cb); } else speakFi(text, cb);
+      });
+    }).catch(()=>speakFi(text, cb));
+    return;
+  }
   if(videoId && start!=null && end!=null && ytState!=='failed'){
     const play = ()=> playSegment(start, end, cb);
     if(ytState==='ready'){
+      audUse('yt');
       if(_quizVideoId===videoId){ play(); return; }
       _quizVideoId = videoId; ytLoadedId = videoId;
       try{ ytPlayer.loadVideoById({videoId, startSeconds:start}); }
@@ -2277,7 +2316,7 @@ function playQuizAudio(text, videoId, start, end, cb){
     }
     // player not yet loaded — load it, then play (or fall back to TTS)
     loadYT(videoId, ok=>{
-      if(ok){ _quizVideoId=videoId; play(); }
+      if(ok){ audUse('yt'); _quizVideoId=videoId; play(); }
       else speakFi(text, cb);
     });
     return;
@@ -2285,9 +2324,9 @@ function playQuizAudio(text, videoId, start, end, cb){
   speakFi(text, cb); // no video data (or YT unavailable) → TTS fallback
 }
 // Shorthand for quiz items (Library Quiz pool items have videoId/start/end directly)
-function playItemAudio(item, cb){ playQuizAudio(item.line, item.videoId, item.start, item.end, cb); }
+function playItemAudio(item, cb){ playQuizAudio(item.line, item.videoId, item.start, item.end, cb, item.audioKey); }
 // Shorthand for Daily Challenge items (line object has start/end, songObj has videoId)
-function playChLineAudio(line, songObj, cb){ playQuizAudio(line.text, songObj&&songObj.videoId, line.start, line.end, cb); }
+function playChLineAudio(line, songObj, cb){ playQuizAudio(line.text, songObj&&songObj.videoId, line.start, line.end, cb, songObj&&songObj.audioKey); }
 // No dictionary/inflected-form questions: every item is grounded in a real lyric line.
 let lqItems=[], lqIdx=0, lqScore=0, lqTotal=10, lqLocked=false;
 
@@ -2298,7 +2337,7 @@ async function buildQuizPool(){
   verbs.forEach(v=>{
     (v.sentences||[]).forEach(s=>{
       if(!s.text || !s.surface) return;
-      pool.push({ word:s.surface, line:s.text, english:s.english||'', roman:s.roman||null, song:s.song, videoId:s.videoId||null, start:s.start, end:s.end });
+      pool.push({ word:s.surface, line:s.text, english:s.english||'', roman:s.roman||null, song:s.song, videoId:s.videoId||null, audioKey:s.audioKey||null, start:s.start, end:s.end });
     });
   });
   // Enrich pool with nextLine for chain_recall (consecutive line pairs)
@@ -2563,7 +2602,7 @@ function qChainRecall(quiz, item){
   quiz.appendChild(prompt);
   setTimeout(()=>playItemAudio(item), 350);
   // the answer is the NEXT line — play its own YouTube segment on reveal
-  const nextItem = { line:item.nextLine.text, videoId:item.videoId, start:item.nextLine.start, end:item.nextLine.end };
+  const nextItem = { line:item.nextLine.text, videoId:item.videoId, audioKey:item.audioKey||null, start:item.nextLine.start, end:item.nextLine.end };
   renderSpeakQuiz(quiz, item.nextLine.text, { longForm:true, maxMs:8000, revealText:item.nextLine.text, audioItem:nextItem });
 }
 
@@ -2698,6 +2737,25 @@ async function saveTranslations(){
 
 async function saveSong(){
   if(!song.id) song.id = uid();
+  // Uploaded audio: write the blob to IndexedDB and pin the key to this song id.
+  if(song.audioKey || pickedAudioFile){
+    if(pickedAudioFile){
+      const key = audioKeyFor(song.id);
+      try{
+        await adbPut(key, pickedAudioFile);
+        song.audioKey = key;
+        song.videoId = null;
+        // the newly stored blob is the live source
+        fileState='unloaded'; fileLoadedKey=null;
+      }catch(e){
+        song.audioKey = null;
+        toast('Could not store the audio file — spoken audio will be used');
+      }
+      pickedAudioFile = null;
+    } else if(song.audioKey === '__pending__'){
+      song.audioKey = null; // intent without a file
+    }
+  }
   await store.set('song:'+song.id, song);
   await loadIndex();
   const meta = songsIndex.find(m=>m.id===song.id);
@@ -2756,7 +2814,7 @@ async function renderCommunityScreen(){
 async function importCommunitySong(entry){
   const localSong = {
     id: null, title: entry.title, language:'Finnish', bcp47: entry.bcp47 || 'fi-FI',
-    rtl:false, nonLatin:false, videoId: entry.videoId,
+    rtl:false, nonLatin:false, videoId: entry.videoId, audioKey: null,
     verses: (entry.verses||[]).map(vs=>({
       lines: (vs.lines||[]).map(l=>({
         text: l.text, roman:null, english:'',
@@ -2783,7 +2841,7 @@ function songWordCount(s){
 
 function buildSharePayload(s){
   return {
-    title: s.title, videoId: s.videoId, bcp47: s.bcp47 || 'fi-FI',
+    title: s.title, videoId: s.videoId || null, bcp47: s.bcp47 || 'fi-FI',
     verses: s.verses.map(vs=>({
       lines: vs.lines.map(l=>({
         text: l.text, start: l.start, end: l.end,
@@ -2856,6 +2914,45 @@ function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
 let importState = null; // {title, verses:[[lines]], transVerses|null, videoId, editingId}
 let editingSongId = null; // set when re-editing an existing song
+let importSrc = 'yt';     // 'yt' | 'file' — chosen once, at import
+let pickedAudioFile = null; // File chosen this import session (null = keep existing)
+
+function setImportSrc(which){
+  importSrc = which;
+  const yt = which==='yt';
+  $('src-tab-yt').classList.toggle('active', yt);
+  $('src-tab-file').classList.toggle('active', !yt);
+  $('src-pane-yt').classList.toggle('hidden', !yt);
+  $('src-pane-file').classList.toggle('hidden', yt);
+}
+// Source is chosen once, at import. When re-editing an existing song the
+// chooser is locked to the source that song already uses.
+function lockImportSrc(locked){
+  ['src-tab-yt','src-tab-file'].forEach(id=>{
+    const b=$(id); if(!b) return;
+    b.disabled = locked;
+    b.style.opacity = locked ? .5 : 1;
+    b.style.cursor = locked ? 'not-allowed' : 'pointer';
+    b.title = locked ? 'The audio source is fixed when a song is first imported' : '';
+  });
+}
+function fmtBytes(n){
+  if(n < 1024) return n+' B';
+  if(n < 1024*1024) return (n/1024).toFixed(0)+' KB';
+  return (n/(1024*1024)).toFixed(1)+' MB';
+}
+function onAudioPicked(file){
+  const info = $('audio-pick-info');
+  if(!file){ pickedAudioFile=null; info.className='f-hint'; info.textContent=''; return; }
+  if(!/^audio\//.test(file.type||'') && !/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba|webm)$/i.test(file.name||'')){
+    pickedAudioFile=null; info.className='f-hint bad';
+    info.textContent = 'That does not look like an audio file.';
+    return;
+  }
+  pickedAudioFile = file;
+  info.className='f-hint ok';
+  info.textContent = `✓ ${file.name} · ${fmtBytes(file.size)}`;
+}
 
 // ── text normalization: lowercase + strip all punctuation/special chars ──
 // keeps letters (any script), combining marks, digits, spaces
@@ -2894,6 +2991,9 @@ function beginImport(){
   editingSongId = null;
   $('in-title').value=''; $('in-lyrics').value=''; $('in-trans').value='';
   $('in-video').value='';
+  $('in-audio').value=''; onAudioPicked(null);
+  setImportSrc('yt');
+  lockImportSrc(false);
   showScreen('import-screen');
 }
 
@@ -2914,7 +3014,15 @@ async function analyze(){
       verses.forEach(v=>{ transVerses.push(flat.slice(p, p+v.length)); p+=v.length; });
     }
   }
-  importState = { title, verses, transVerses, videoId: parseVideoId($('in-video').value.trim()), editingId: editingSongId };
+  // Source is fixed at import: exactly one of videoId / audio file is carried forward.
+  const useFile = (importSrc==='file');
+  const keepExistingAudio = useFile && !pickedAudioFile && !!(editingSongId && song && song.audioKey);
+  if(useFile && !pickedAudioFile && !keepExistingAudio){
+    toast('Choose an audio file, or switch to the YouTube tab'); return;
+  }
+  importState = { title, verses, transVerses,
+    videoId: useFile ? null : parseVideoId($('in-video').value.trim()),
+    useFile, keepExistingAudio, editingId: editingSongId };
   runAnalysis();
 }
 
@@ -2931,7 +3039,7 @@ async function runAnalysis(){
   showScreen('analyze-screen');
   $('analyze-err').style.display='none';
   $('analyze-retry-row').style.display='none';
-  const { title, verses, transVerses, videoId } = importState;
+  const { title, verses, transVerses, videoId, useFile, keepExistingAudio } = importState;
   try{
     // Load the offline morphology engine (cached after first import).
     if(!MCE.ready){
@@ -2947,6 +3055,14 @@ async function runAnalysis(){
       language:langHint.language, bcp47:langHint.bcp47,
       rtl:langHint.rtl, nonLatin:langHint.nonLatin,
       videoId, verses: outVerses };
+    if(useFile){
+      // audioKey is assigned on save (needs the song id); mark the intent now
+      song.audioKey = (keepExistingAudio && song.id) ? audioKeyFor(song.id)
+                    : (song.id ? audioKeyFor(song.id) : '__pending__');
+      song.videoId = null;
+    } else {
+      song.audioKey = null;
+    }
     renderReview();
   }catch(err){
     $('analyze-err').textContent = 'Analysis failed: ' + err.message +
@@ -3014,6 +3130,153 @@ function validateReview(){
   return true;
 }
 
+
+// ═══════ AUDIO BLOB STORE (IndexedDB) — uploaded song audio ═══════
+// Blobs are stored natively (no base64 inflation). Keyed by song id.
+const ADB_NAME='laulupaja-audio', ADB_STORE='blobs';
+let _adb=null;
+function adbOpen(){
+  if(_adb) return Promise.resolve(_adb);
+  return new Promise((res,rej)=>{
+    if(!window.indexedDB){ rej(new Error('no-idb')); return; }
+    let rq;
+    try{ rq = indexedDB.open(ADB_NAME, 1); }catch(e){ rej(e); return; }
+    rq.onupgradeneeded = ()=>{ const db=rq.result;
+      if(!db.objectStoreNames.contains(ADB_STORE)) db.createObjectStore(ADB_STORE); };
+    rq.onsuccess = ()=>{ _adb=rq.result; res(_adb); };
+    rq.onerror = ()=>rej(rq.error||new Error('idb-open'));
+  });
+}
+function adbPut(key, blob){
+  return adbOpen().then(db=>new Promise((res,rej)=>{
+    const tx=db.transaction(ADB_STORE,'readwrite');
+    tx.objectStore(ADB_STORE).put(blob, key);
+    tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error||new Error('idb-put'));
+  }));
+}
+function adbGet(key){
+  return adbOpen().then(db=>new Promise((res,rej)=>{
+    const tx=db.transaction(ADB_STORE,'readonly');
+    const rq=tx.objectStore(ADB_STORE).get(key);
+    rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>rej(rq.error||new Error('idb-get'));
+  }));
+}
+function adbDel(key){
+  return adbOpen().then(db=>new Promise((res)=>{
+    const tx=db.transaction(ADB_STORE,'readwrite');
+    tx.objectStore(ADB_STORE).delete(key);
+    tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);
+  })).catch(()=>false);
+}
+const audioKeyFor = id => 'audio:'+id;
+
+// ═══════ AUD — PLAYBACK FACADE (YouTube iframe ⟷ uploaded <audio>) ═══════
+// Every playback call site goes through AUD. Source is fixed per song at import:
+// song.audioKey → local file;  song.videoId → YouTube.
+let fileEl=null;            // HTMLAudioElement for uploaded audio
+let fileUrl=null;           // object URL currently attached
+let fileState='unloaded';   // unloaded|loading|ready|failed
+let fileLoadedKey=null;
+
+function fileAudioEl(){
+  if(!fileEl){
+    fileEl = document.createElement('audio');
+    fileEl.preload='auto';
+    fileEl.playsInline=true;
+    fileEl.setAttribute('playsinline','');
+    const host=$('yt-wrap');
+    if(host) host.appendChild(fileEl);
+  }
+  return fileEl;
+}
+// Attach a Blob (or object URL) to the <audio> element and wait for metadata.
+function fileAttach(blob, key){
+  return new Promise(res=>{
+    const el=fileAudioEl();
+    try{ if(fileUrl) URL.revokeObjectURL(fileUrl); }catch(e){}
+    fileUrl = URL.createObjectURL(blob);
+    fileState='loading';
+    const ok=()=>{ cleanup(); fileState='ready'; fileLoadedKey=key; res(true); };
+    const bad=()=>{ cleanup(); fileState='failed'; res(false); };
+    const cleanup=()=>{ el.removeEventListener('loadedmetadata',ok); el.removeEventListener('error',bad); clearTimeout(tm); };
+    const tm=setTimeout(bad, 15000);
+    el.addEventListener('loadedmetadata',ok);
+    el.addEventListener('error',bad);
+    el.src=fileUrl;
+    try{ el.load(); }catch(e){}
+  });
+}
+// True when the given (or active) song's SOURCE is an uploaded file.
+function usingFile(s){ const t = s || (typeof song!=='undefined' ? song : null); return !!(t && t.audioKey); }
+// Is the given (or active) song's own source loaded and ready?
+function songSrcReady(s){
+  const t = s || (typeof song!=='undefined' ? song : null);
+  if(!t) return false;
+  return t.audioKey ? (fileState==='ready' && fileLoadedKey===t.audioKey) : ytState==='ready';
+}
+// The transport currently in control of AUD.* calls. Every playback path sets
+// this explicitly before playing, so cross-library items (Daily Challenge,
+// Library Quiz) can't read one clock while the other transport is playing.
+let audBackend='yt';
+function audUse(which){
+  if(audBackend===which) return;
+  // silence the transport being left behind
+  if(which==='file'){ if(ytState==='ready'){ try{ ytPlayer.pauseVideo(); }catch(e){} } }
+  else if(fileEl){ try{ fileEl.pause(); }catch(e){} }
+  audBackend = which;
+}
+function audSyncToSong(){ audUse(usingFile() ? 'file' : 'yt'); }
+
+const AUD = {
+  // which backend the current song uses
+  isFile(){ return audBackend==='file'; },
+  // is the backend ready to play?
+  ready(){ return audBackend==='file' ? fileState==='ready' : ytState==='ready'; },
+  failed(){ return audBackend==='file' ? fileState==='failed' : ytState==='failed'; },
+  now(){
+    if(audBackend==='file'){ try{ return fileEl ? fileEl.currentTime : 0; }catch(e){ return 0; } }
+    try{ return ytPlayer.getCurrentTime(); }catch(e){ return 0; }
+  },
+  duration(){
+    if(audBackend==='file'){ try{ return (fileEl && isFinite(fileEl.duration)) ? fileEl.duration : 0; }catch(e){ return 0; } }
+    try{ return ytPlayer.getDuration(); }catch(e){ return 0; }
+  },
+  seek(t){
+    if(audBackend==='file'){ try{ fileAudioEl().currentTime = Math.max(0,t); }catch(e){} return; }
+    try{ ytPlayer.seekTo(Math.max(0,t), true); }catch(e){}
+  },
+  play(){
+    if(audBackend==='file'){ try{ const pr=fileAudioEl().play(); if(pr&&pr.catch) pr.catch(()=>{}); }catch(e){} return; }
+    try{ ytPlayer.playVideo(); }catch(e){}
+  },
+  pause(){
+    if(audBackend==='file'){ try{ fileAudioEl().pause(); }catch(e){} return; }
+    try{ ytPlayer.pauseVideo(); }catch(e){}
+  },
+  rate(r){
+    if(audBackend==='file'){ try{ fileAudioEl().playbackRate = r; }catch(e){} return; }
+    try{ if(ytPlayer.setPlaybackRate) ytPlayer.setPlaybackRate(r); }catch(e){}
+  },
+  // Load the audio source for song `s`. cb(ok).
+  load(s, cb){
+    if(usingFile(s)){
+      if(fileState==='ready' && fileLoadedKey===s.audioKey){ audUse('file'); cb(true); return; }
+      adbGet(s.audioKey).then(blob=>{
+        if(!blob){ fileState='failed'; cb(false); return; }
+        fileAttach(blob, s.audioKey).then(ok=>{ if(ok) audUse('file'); cb(ok); });
+      }).catch(()=>{ fileState='failed'; cb(false); });
+      return;
+    }
+    if(!s || !s.videoId){ cb(false); return; }
+    loadYT(s.videoId, ok=>{ if(ok) audUse('yt'); cb(ok); });
+  },
+  // Cue without autoplay (used when switching songs).
+  cue(s, cb){
+    if(usingFile(s)){ AUD.load(s, ok=>{ if(ok) AUD.pause(); if(cb) cb(ok); }); return; }
+    AUD.load(s, ok=>{ if(ok){ try{ AUD.pause(); }catch(e){} } if(cb) cb(ok); });
+  }
+};
+
 // ═══════ YOUTUBE — LOADER, SEGMENTS, TAP-ALONG TAGGER ═══════
 let ytPlayer=null, ytState='unloaded'; // unloaded|loading|ready|failed
 let ytLoadedId=null; // videoId currently loaded in the player
@@ -3042,13 +3305,13 @@ function loadYT(videoId, cb){
   document.head.appendChild(s);
 }
 function stopSegment(){ clearInterval(segTimer); segTimer=null;
-  if(ytState==='ready'){ try{ ytPlayer.pauseVideo() }catch(e){} } }
+  if(AUD.ready()){ try{ AUD.pause() }catch(e){} } }
 function playSegment(start, end, onend){
   stopSegment(); stopTTS();
   try{
-    ytPlayer.seekTo(Math.max(0,start), true); ytPlayer.playVideo();
+    AUD.seek(start); AUD.play();
     segTimer = setInterval(()=>{
-      try{ if(ytPlayer.getCurrentTime() >= end){ stopSegment(); if(onend) onend(); } }
+      try{ if(AUD.now() >= end){ stopSegment(); if(onend) onend(); } }
       catch(e){ stopSegment(); if(onend) onend(); }
     }, 100);
   }catch(e){ if(onend) onend(); }
@@ -3078,16 +3341,24 @@ function startTagger(fresh){
     tagIdx = tagFlat.length+1;
     $('tag-done-btn').classList.remove('hidden');
   }
-  $('tag-btn').disabled=true; $('tag-btn').textContent='Loading video…';
+  const _fileSrc = usingFile(song);
+  $('tag-btn').disabled=true; $('tag-btn').textContent = _fileSrc ? 'Loading audio…' : 'Loading video…';
+  if(_fileSrc){ $('yt-wrap').classList.add('audio-only'); } else { $('yt-wrap').classList.remove('audio-only'); }
   renderTagCur();
-  loadYT(song.videoId, ok=>{
+  AUD.load(song, ok=>{
     if(ok){
+      if(_fileSrc){ const el=fileAudioEl(); el.controls=true; el.classList.add('file-audio-visible'); }
       if(tagIdx > tagFlat.length){ $('tag-btn').disabled=true; $('tag-btn').textContent='All tagged ✓'; }
       else { $('tag-btn').disabled=false; $('tag-btn').textContent='⏺ Line starts now'; }
     }
     else{
-      $('yt-wrap').innerHTML = '<div id="yt-unavailable">Video can\'t load in this environment (it will work in the standalone build). Spoken audio will be used instead.</div>';
-      $('tag-btn').disabled=true; $('tag-btn').textContent='Video unavailable';
+      if(_fileSrc){
+        $('tag-btn').disabled=true; $('tag-btn').textContent='Audio unavailable';
+        toast('Audio file missing — re-import the song to attach it again');
+      } else {
+        $('yt-wrap').innerHTML = '<div id="yt-unavailable">Video can\'t load in this environment (it will work in the standalone build). Spoken audio will be used instead.</div>';
+        $('tag-btn').disabled=true; $('tag-btn').textContent='Video unavailable';
+      }
     }
   });
 }
@@ -3139,8 +3410,8 @@ function addEndRow(){
   $('tag-list').appendChild(row);
 }
 function tagTap(){
-  if(ytState!=='ready') return;
-  let t; try{ t = ytPlayer.getCurrentTime() }catch(e){ return }
+  if(!AUD.ready()) return;
+  let t; try{ t = AUD.now() }catch(e){ return }
   tagTimes[tagIdx] = t;
   if(tagIdx < tagFlat.length) addTagRow(tagIdx);
   tagIdx++;
@@ -3174,12 +3445,12 @@ function stopAudio(){
   if(curPlayBtn){ curPlayBtn.classList.remove('playing'); curPlayBtn=null; }
   if(!suppressVerseReset && typeof versePlaying!=='undefined' && versePlaying) setVerseBtn(false);
 }
-function hasVideoFor(line){ return ytState==='ready' && line.start!=null && line.end!=null; }
+function hasVideoFor(line){ return songSrcReady(song) && line.start!=null && line.end!=null; }
 function playLine(line, btn, onend){
   stopAudio();
   if(btn){ curPlayBtn=btn; btn.classList.add('playing'); }
   const done = ()=>{ if(curPlayBtn){curPlayBtn.classList.remove('playing');curPlayBtn=null;} if(onend) onend(); };
-  if(hasVideoFor(line)){ playSegment(line.start, line.end, done); return }
+  if(hasVideoFor(line)){ audSyncToSong(); playSegment(line.start, line.end, done); return }
   if(window.speechSynthesis){
     const u = new SpeechSynthesisUtterance(line.text);
     u.lang = song.bcp47; u.rate = 0.88;
@@ -3204,6 +3475,7 @@ function playVerseSeq(){
   const finish = ()=> setVerseBtn(false);
   // contiguous video segments play as one span; else line-by-line
   if(lines.every(hasVideoFor)){
+    audSyncToSong();
     playSegment(lines[0].start, lines[lines.length-1].end, finish); return;
   }
   let i=0; const step=()=>{
@@ -4463,7 +4735,11 @@ function startGame(){
   $('song-title-lbl').textContent = song.title + ' · ' + song.language;
   showScreen('game-screen');
   updateSharePill();
-  if(song.videoId){
+  if(usingFile(song)){
+    // uploaded audio: load (or re-activate) the blob; AUD.load sets the backend
+    AUD.load(song, ok=>{ if(!ok) toast('Audio file missing — using spoken audio'); });
+  } else if(song.videoId){
+    audUse('yt');
     if(ytState==='unloaded'){
       // load in background; playLine() checks availability live, so no restart needed
       loadYT(song.videoId, ok=>{ if(!ok) toast('Video unavailable here — using spoken audio'); });
@@ -4615,7 +4891,7 @@ const RG_TIERS={tiles:[3,6,9,12,15], tap:[10,25,50,75,100]};
 const RG_AHEAD=3.0, RG_FORCE=1.2, RG_MAXVIS=5;
 
 function rgNow(){
-  if(rgVideo){ try{ return ytPlayer.getCurrentTime(); }catch(e){ return 0; } }
+  if(rgVideo){ try{ return AUD.now(); }catch(e){ return 0; } }
   return rgBase + (performance.now()-rgReal0)/1000*rgRate;
 }
 function rgAudio(){ if(!rgACtx){ try{ rgACtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
@@ -5169,11 +5445,12 @@ function rgStartRun(mode){
   $('rg-assembly').style.display = rgMode==='tap' ? 'none' : 'flex';
   if(rgMode==='tap'){ rgLineRender(); }
   // arm: cue the video (paused) at the pre-roll point; player presses ▶ when ready
-  rgVideo = !!(ytState==='ready' && song.videoId);
+  rgVideo = !!(songSrcReady(song) && (song.videoId || song.audioKey));
+  if(rgVideo) audSyncToSong();
   if(rgVideo){
     try{
-      ytPlayer.seekTo(Math.max(0,rgData.t0-3), true);
-      ytPlayer.pauseVideo();
+      AUD.seek(Math.max(0,rgData.t0-3));
+      AUD.pause();
     }catch(e){ rgVideo=false; }
   }
   // position timeline at the armed point
@@ -5187,8 +5464,8 @@ function rgGo(){
   if(rgPaused){ rgCountdown(()=>rgResume()); return; }
   if(rgVideo){
     try{
-      if(ytPlayer.setPlaybackRate) ytPlayer.setPlaybackRate(rgRate);
-      ytPlayer.playVideo();
+      AUD.rate(rgRate);
+      AUD.play();
     }catch(e){ rgVideo=false; }
   }
   if(!rgVideo){ rgBase=rgData.t0-3; rgReal0=performance.now(); }
@@ -5202,7 +5479,7 @@ function rgPauseGame(){
   rgRun=false; rgPaused=true;
   if(rgRAF) cancelAnimationFrame(rgRAF);
   rgPauseT=rgNow();
-  if(rgVideo){ try{ ytPlayer.pauseVideo(); }catch(e){} }
+  if(rgVideo){ try{ AUD.pause(); }catch(e){} }
   $('rg-pause').classList.remove('show');
   $('rg-lasers').classList.remove('show');
   $('rg-play').classList.add('show');
@@ -5219,7 +5496,7 @@ function rgCountdown(done){
 }
 function rgResume(){
   if(rgVideo){
-    try{ if(ytPlayer.setPlaybackRate) ytPlayer.setPlaybackRate(rgRate); ytPlayer.playVideo(); }catch(e){}
+    try{ AUD.rate(rgRate); AUD.play(); }catch(e){}
   } else {
     rgBase=rgPauseT; rgReal0=performance.now();
   }
@@ -5234,7 +5511,7 @@ function rgStop(){
   $('rg-count').classList.remove('show');
   $('rg-lasers').classList.remove('show');
   if(rgRAF) cancelAnimationFrame(rgRAF);
-  if(rgVideo){ try{ ytPlayer.pauseVideo(); if(ytPlayer.setPlaybackRate) ytPlayer.setPlaybackRate(1);}catch(e){} }
+  if(rgVideo){ try{ AUD.pause(); AUD.rate(1); }catch(e){} }
 }
 async function rgSaveScore(finalScore){
   const all=(await store.get('rg-scores-v2'))||{};
@@ -5312,14 +5589,15 @@ function rgClose(){
 // ── Refine pass: tap syllable onsets against the real recording ──
 let rgRefTimes=[], rgRefLi=0, rgRefSi=0, rgRefFlat=[], rgRefSyls=[];
 function rgRefineStart(){
-  if(ytState!=='ready' || !song.videoId){ toast('Refining needs the video loaded'); return; }
+  if(!songSrcReady(song) || !(song.videoId||song.audioKey)){ toast('Refining needs the audio loaded'); return; }
+  audSyncToSong();
   rgRefFlat=rgFlatLines();
   rgRefSyls=rgRefFlat.map(l=>rgSylTexts(l.text));
   rgRefTimes=rgRefFlat.map(()=>[]);
   rgRefLi=0; rgRefSi=0;
   rgShowPanel('rg-refine-panel');
   rgRefRender();
-  try{ ytPlayer.seekTo(Math.max(0,rgRefFlat[0].start-1.5),true); ytPlayer.playVideo(); }catch(e){}
+  try{ AUD.seek(Math.max(0,rgRefFlat[0].start-1.5)); AUD.play(); }catch(e){}
 }
 function rgRefRender(){
   $('rg-ref-prog').textContent='Line '+(rgRefLi+1)+' / '+rgRefFlat.length;
@@ -5330,7 +5608,7 @@ function rgRefRender(){
 }
 function rgRefTap(){
   if(ytState!=='ready') return;
-  let t; try{ t=ytPlayer.getCurrentTime(); }catch(e){ return; }
+  let t; try{ t=AUD.now(); }catch(e){ return; }
   rgAudio(); rgSnare();
   rgRefTimes[rgRefLi][rgRefSi]=t;
   rgRefSi++;
@@ -5339,13 +5617,13 @@ function rgRefTap(){
     if(rgRefLi>=rgRefFlat.length){ rgRefDone(); return; }
     const nxt=rgRefFlat[rgRefLi];
     if(nxt.start!=null && nxt.start-t>2.5){
-      try{ ytPlayer.seekTo(Math.max(0,nxt.start-1),true); }catch(e){}
+      try{ AUD.seek(Math.max(0,nxt.start-1)); }catch(e){}
     }
   }
   rgRefRender();
 }
 async function rgRefDone(){
-  try{ ytPlayer.pauseVideo(); }catch(e){}
+  try{ AUD.pause(); }catch(e){}
   song.rhythm={v:1, syl:rgRefTimes};
   await saveSong();
   toast('Rhythm refined ✓');
@@ -5361,15 +5639,15 @@ function rgRefBack(){
   }
   rgRefRender();
   const L=rgRefFlat[rgRefLi];
-  try{ ytPlayer.seekTo(Math.max(0,L.start-1),true); ytPlayer.playVideo(); }catch(e){}
+  try{ AUD.seek(Math.max(0,L.start-1)); AUD.play(); }catch(e){}
 }
 function rgRefRestart(){
   rgRefTimes[rgRefLi]=[]; rgRefSi=0; rgRefRender();
   const L=rgRefFlat[rgRefLi];
-  try{ ytPlayer.seekTo(Math.max(0,L.start-1),true); ytPlayer.playVideo(); }catch(e){}
+  try{ AUD.seek(Math.max(0,L.start-1)); AUD.play(); }catch(e){}
 }
 function rgRefCancel(){
-  try{ ytPlayer.pauseVideo(); }catch(e){}
+  try{ AUD.pause(); }catch(e){}
   rgShowPanel('rg-start-panel');
 }
 
@@ -5464,9 +5742,10 @@ function rgArrBeginVerse(vi){
   rgArrHud();
 
   // Seek + play
-  rgVideo = !!(ytState==='ready' && song.videoId);
+  rgVideo = !!(songSrcReady(song) && (song.videoId || song.audioKey));
+  if(rgVideo) audSyncToSong();
   if(rgVideo){
-    try{ ytPlayer.seekTo(vs, true); ytPlayer.playVideo(); }catch(e){ rgVideo=false; }
+    try{ AUD.seek(vs); AUD.play(); }catch(e){ rgVideo=false; }
   }
   rgArr.startedAt = performance.now();
   rgArr.timerRunning = true;
@@ -5536,13 +5815,13 @@ function rgArrTick(){
   $('rg-arr-time').textContent = Math.ceil(rgArr.timeLeft) + 's';
   if(rgArr.timeLeft <= 0){
     rgArr.timerRunning = false;
-    if(rgVideo) try{ ytPlayer.pauseVideo(); }catch(e){}
+    if(rgVideo) try{ AUD.pause(); }catch(e){}
   }
 }
 
 function rgArrReplay(){
   if(!rgArr || rgArr.verseDone || rgArr.done) return;
-  if(rgVideo) try{ ytPlayer.seekTo(rgArr.vStart, true); ytPlayer.playVideo(); }catch(e){}
+  if(rgVideo) try{ AUD.seek(rgArr.vStart); AUD.play(); }catch(e){}
 }
 
 function rgArrCheck(){
@@ -5556,7 +5835,7 @@ function rgArrCheck(){
   if(!ok) return;
   rgArr.verseDone = true;
   rgArr.timerRunning = false;
-  if(rgVideo) try{ ytPlayer.pauseVideo(); }catch(e){}
+  if(rgVideo) try{ AUD.pause(); }catch(e){}
   const pts = rgArr.correct.length;
   const bonus = Math.ceil(rgArr.timeLeft);
   rgArr.points += pts;
@@ -5580,7 +5859,7 @@ function rgArrHud(){
 async function rgArrFinish(){
   rgArr.done = true;
   if(rgArrRAF) cancelAnimationFrame(rgArrRAF);
-  if(rgVideo) try{ ytPlayer.pauseVideo(); }catch(e){}
+  if(rgVideo) try{ AUD.pause(); }catch(e){}
   const pts = rgArr.points;
   const mult = Math.max(1, rgArr.bonusSecs);
   const final = pts * mult;
@@ -5654,9 +5933,10 @@ function rgQPStart(){
   $('rg-qp-options').innerHTML = '';
   $('rg-qp-feedback').textContent = '';
 
-  rgVideo = !!(ytState==='ready' && song.videoId);
+  rgVideo = !!(songSrcReady(song) && (song.videoId || song.audioKey));
+  if(rgVideo) audSyncToSong();
   const t0 = flat[0].start;
-  if(rgVideo) try{ ytPlayer.seekTo(Math.max(0, t0 - 2), true); ytPlayer.playVideo(); }catch(e){ rgVideo=false; }
+  if(rgVideo) try{ AUD.seek(Math.max(0, t0 - 2)); AUD.play(); }catch(e){ rgVideo=false; }
   if(rgQP_RAF) cancelAnimationFrame(rgQP_RAF);
   rgQP_RAF = requestAnimationFrame(rgQPTick);
 }
@@ -5665,7 +5945,7 @@ function rgQPTick(){
   if(!rgQP || rgQP.done) return;
   rgQP_RAF = requestAnimationFrame(rgQPTick);
   let t;
-  try{ t = ytPlayer.getCurrentTime(); }catch(e){ return; }
+  try{ t = AUD.now(); }catch(e){ return; }
   const rounds = rgQP.rounds;
   // Latest line whose start we've reached — handles overlapping/contiguous
   // timestamps and keeps the round answerable through instrumental gaps.
@@ -5737,7 +6017,7 @@ function rgQPHud(){
 
 async function rgQPFinish(){
   rgQP.done = true;
-  if(rgVideo) try{ ytPlayer.pauseVideo(); }catch(e){}
+  if(rgVideo) try{ AUD.pause(); }catch(e){}
   cancelAnimationFrame(rgQP_RAF);
   const pts = rgQP.points;
   const bonus = Math.max(1, rgQP.bestStreak);
@@ -5840,6 +6120,10 @@ $('ch-skip-btn').addEventListener('click', ()=>{ stopAudio(); $('challenge-overl
 $('ch-next-btn').addEventListener('click', ()=>{ stopAudio(); chIdx++; renderChQuestion(); });
 $('ch-done-btn').addEventListener('click', finishChallenge);
 $('import-back-btn').addEventListener('click', renderHome);
+$('src-tab-yt').addEventListener('click', ()=>{ if(!$('src-tab-yt').disabled) setImportSrc('yt'); });
+$('src-tab-file').addEventListener('click', ()=>{ if(!$('src-tab-file').disabled) setImportSrc('file'); });
+$('pick-audio-btn').addEventListener('click', ()=>$('in-audio').click());
+$('in-audio').addEventListener('change', e=>onAudioPicked(e.target.files && e.target.files[0]));
 $('analyze-btn').addEventListener('click', analyze);
 $('analyze-back-btn').addEventListener('click', ()=>showScreen('import-screen'));
 $('analyze-retry-btn').addEventListener('click', runAnalysis);
@@ -5848,13 +6132,13 @@ $('review-next-btn').addEventListener('click', async ()=>{
   if(!validateReview()) return;
   normalizeSongTexts(song); // review edits may reintroduce caps/punctuation
   await saveSong();
-  if(song.videoId) startTagger();
+  if(song.videoId || song.audioKey) startTagger();
   else startGame();
 });
 $('tag-btn').addEventListener('click', tagTap);
 $('tag-restart-btn').addEventListener('click', ()=>startTagger(true));
 $('edit-tags-btn').addEventListener('click', ()=>{
-  if(!song.videoId){ toast('No video attached — use ✎ Edit text to add a YouTube link first'); return }
+  if(!song.videoId && !song.audioKey){ toast('No audio attached — use ✎ Edit text to add a YouTube link or an audio file first'); return }
   stopAudio(); startTagger();
 });
 $('edit-trans-btn').addEventListener('click', openTransEditor);
@@ -5868,6 +6152,16 @@ $('edit-text-btn').addEventListener('click', ()=>{
   const anyTrans = song.verses.some(v=>v.lines.some(l=>l.english));
   $('in-trans').value = anyTrans ? song.verses.map(v=>v.lines.map(l=>l.english||'').join('\n')).join('\n\n') : '';
   $('in-video').value = song.videoId ? 'https://www.youtube.com/watch?v='+song.videoId : '';
+  $('in-audio').value=''; onAudioPicked(null);
+  if(song.audioKey){
+    setImportSrc('file');
+    const info=$('audio-pick-info');
+    info.className='f-hint ok';
+    info.textContent='✓ Using the audio file attached at import. Choose another to replace it.';
+  } else {
+    setImportSrc('yt');
+  }
+  lockImportSrc(!!song.id);
   showScreen('import-screen');
   toast('Saving changes re-runs the AI analysis');
 });
